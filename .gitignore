@@ -1,0 +1,52 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment variables and secrets
+.env
+.env.local
+*.key
+*.pem
+
+# Generated data — never commit
+data/raw/*
+data/processed/*
+data/events/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/events/.gitkeep
+
+# Models and experiment tracking
+*.pkl
+*.joblib
+mlruns/
+mlartifacts/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Node / React
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+*.log
