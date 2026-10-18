@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 18 Oct 2026
-**Status:** Phase A complete, Phase B complete (Tasks 1–6). Starting Task 7.
+**Status:** Phase A complete, Phase B complete (Tasks 1–7). Starting Task 8.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -142,10 +142,10 @@ Kafka risky. **Not decided yet — my call to make.**
 **PHASE B — DATA ✅ COMPLETE**
 5. ✅ Domain model: customers, cards, merchants, devices
 6. ✅ Synthetic generator: realistic normal spending behaviour
-7. ⬜ **← CURRENT.** Fraud pattern injection + labelled dataset export
+7. ✅ Fraud pattern injection + labelled dataset export
 
 **PHASE C — STREAMING**
-8. ⬜ Event log design + producer
+8. ⬜**← CURRENT.**Event log design + producer
 9. ⬜ Consumer with offsets + replay
 10. ⬜ Online feature engine (rolling windows, velocity, z-scores)
 11. ⬜ Offline feature store + point-in-time correctness + leakage tests
@@ -280,6 +280,43 @@ Gaming highest risk 0.452
 - `src/streamguard/generator/txn_loader.py` — batch 5000, **`ANALYZE` after load**
   (otherwise the planner ignores the composite indexes)
 - `scripts/generate_transactions.py` — typer CLI (`--days --seed --no-truncate`)
+### Task 7 — Fraud injection ✅ 18 Oct
+- `src/streamguard/generator/fraud_patterns.py` — five `FraudPatternSpec`
+  definitions, shares summing to 1.0, validated at import time
+- `src/streamguard/generator/fraud_injector.py` — `FraudInjector`, third
+  independent RNG stream (`seed + 2_000_029`)
+- `scripts/generate_transactions.py` — rewritten to merge fraud into each day
+
+**DB state:** 791,112 transactions / 3,003 fraud / **0.380%**
+
+| Pattern | n | Avg amount | Txns per card | Signature |
+|---|---|---|---|---|
+| card_testing | 1,586 | ₹50 | 13.4 | velocity, trivial amounts |
+| account_takeover | 663 | ₹10,391 | 7.4 | deviation from personal baseline |
+| card_not_present | 405 | ₹6,934 | 2.6 | channel + category + amount |
+| merchant_collusion | 194 | ₹55,136 | 3.8 | merchant-level aggregates |
+| geo_impossible | 155 | ₹5,327 | 2.8 | implied speed |
+
+**Design:** fraud generated as **episodes** (a burst on one compromised card),
+not isolated rows — that is what creates the velocity and deviation signals.
+Six fixed collusion merchants, because collusion is a property of the merchant.
+
+> ### 🐛 TWO BUGS FOUND AND FIXED
+> **1. Doubled data.** The old generation loop was left in the script beside
+> the new one, so every day was inserted twice — 1,580,292 rows instead of
+> ~790k, halving the fraud rate to 0.190%. Caught from the progress output:
+> day 1 showed `+8,246` but `total 799,358`, which is impossible for a counter
+> starting at zero. **Nothing errored.** Fixed by rewriting the script whole.
+>
+> **2. Fraud anchored to the wrong window.** `_random_anchor()` used
+> `settings.simulation_days` (90) rather than the `n_days` actually being
+> generated, so a `--days 7` run discarded 96% of its fraud (238 generated,
+> 10 kept). Fixed by passing `n_days` into `generate_episodes()` and
+> `_random_anchor()`.
+
+**Honesty note for README and report:** these five patterns encode *my*
+assumptions about fraud behaviour. A model that catches them has learned my
+patterns, not real-world fraud.
 
 **DB state:** ~788,000 transactions over 90 days, `is_fraud = false` on all of
 them (fraud is Task 7)
