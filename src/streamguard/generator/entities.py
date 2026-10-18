@@ -28,6 +28,10 @@ from streamguard.utils.geo import jitter_coordinate
 from streamguard.utils.logging_config import get_logger
 
 log = get_logger(__name__)
+# All customers are in India. Generating in local time means "19:00"
+# means 19:00 to the cardholder. PostgreSQL stores timestamptz as UTC
+# internally, so nothing is lost.
+IST = timezone(timedelta(hours=5, minutes=30))
 
 
 # ============================================================
@@ -153,9 +157,7 @@ class PopulationGenerator:
         # would differ between runs even with the same numpy seed.
         Faker.seed(seed)
 
-        self.simulation_start = simulation_start or datetime(
-            2026, 1, 1, tzinfo=timezone.utc
-        )
+        self.simulation_start = simulation_start or datetime(2026, 1, 1, tzinfo=IST)
 
     # ---------- Customers ----------
 

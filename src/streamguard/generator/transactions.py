@@ -29,6 +29,10 @@ from streamguard.utils.geo import haversine_km, jitter_coordinate
 from streamguard.utils.logging_config import get_logger
 
 log = get_logger(__name__)
+# All customers are in India. Transactions are generated in local
+# time so "19:00" means 19:00 to the cardholder. PostgreSQL stores
+# timestamptz as UTC internally; nothing is lost.
+IST = timezone(timedelta(hours=5, minutes=30))
 
 CATEGORY_BY_MCC = {c.mcc: c for c in MERCHANT_CATEGORIES}
 
@@ -65,7 +69,7 @@ class TransactionGenerator:
     ):
         self.population = population
         self.rng = np.random.default_rng(seed + 1_000_003)  # distinct stream
-        self.start = simulation_start or datetime(2026, 1, 1, tzinfo=timezone.utc)
+        self.start = simulation_start or datetime(2026, 1, 1, tzinfo=IST)
         self._counter = 0
 
         self._build_indexes()
