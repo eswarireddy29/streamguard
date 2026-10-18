@@ -1,5 +1,5 @@
 """
-Generate and load normal transaction activity.
+Generate and load transaction activity, with fraud injected.
 
     python scripts/generate_transactions.py
     python scripts/generate_transactions.py --days 7
@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from streamguard.config.settings import settings  # noqa: E402
 from streamguard.generator.entities import PopulationGenerator  # noqa: E402
+from streamguard.generator.fraud_injector import FraudInjector  # noqa: E402
 from streamguard.generator.transactions import TransactionGenerator  # noqa: E402
 from streamguard.generator.txn_loader import TransactionLoader  # noqa: E402
 from streamguard.utils.logging_config import get_logger, setup_logging  # noqa: E402
@@ -59,10 +60,44 @@ def main(
     generator = TransactionGenerator(population, seed=random_seed)
     loader = TransactionLoader()
 
-    print(f"\n  Generating {n_days} days...\n")
+    # --- Fraud episodes, generated up front and bucketed by day ---
+    estimated_normal = int(
+        sum(c.txns_per_day for c in population.customers) * n_days
+    )
+    target_fraud = int(estimated_normal * settings.fraud_rate)
+
+    print(f"  Estimated normal transactions : {estimated_normal:,}")
+    print(f"  Target fraud transactions     : {target_fraud:,} "
+          f"({settings.fraud_rate:.2%})\n")
+
+    injector = FraudInjector(population, seed=random_seed, start=generator.start)
+    episodes = injector.generate_episodes(target_fraud, n_days)
+
+    fraud_by_day: dict[int, list] = {}
+    for episode in episodes:
+        for txn in episode.transactions:
+            day_index = (txn.occurred_at - generator.start).days
+            if 0 <= day_index < n_days:
+                fraud_by_day.setdefault(day_index, []).append(txn)
+
+    fraud_total = sum(len(v) for v in fraud_by_day.values())
+    print(f"  Fraud episodes : {len(episodes):,}")
+    print(f"  Fraud rows     : {fraud_total:,}\n")
+
+    # --- Generate day by day, merging fraud into each day ---
+    print(f"  Generating {n_days} days...\n")
     total = 0
+    fraud_written = 0
 
     for day, transactions in generator.stream_days(n_days):
+        day_fraud = fraud_by_day.get(day, [])
+        if day_fraud:
+            # Re-sort: the feature engine replays history in order
+            transactions = sorted(
+                transactions + day_fraud, key=lambda t: t.occurred_at
+            )
+            fraud_written += len(day_fraud)
+
         written = loader.insert_batch(transactions)
         total += written
 
@@ -78,6 +113,8 @@ def main(
 
     print("\n  --- Complete ---")
     print(f"  Transactions : {total:,}")
+    print(f"  Fraud rows   : {fraud_written:,} "
+          f"({fraud_written / max(total, 1):.3%})")
     print(f"  Skipped      : {loader.skipped:,}")
     print(f"  Time         : {elapsed:.1f}s")
     print(f"  Rate         : {total / elapsed:,.0f}/s")
@@ -89,7 +126,8 @@ def main(
               f"investigate before continuing.\n")
 
     log.info("transaction_generation_complete",
-             total=total, skipped=loader.skipped, seconds=round(elapsed, 1))
+             total=total, fraud=fraud_written, skipped=loader.skipped,
+             seconds=round(elapsed, 1))
 
 
 if __name__ == "__main__":
