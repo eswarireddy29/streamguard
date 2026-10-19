@@ -1,0 +1,71 @@
+{
+  "created_at": "2026-10-19T22:00:19",
+  "random_pr_auc": 0.00438710347333991,
+  "pos_weight": 270.5958702064897,
+  "results": [
+    {
+      "strategy": "none",
+      "pr_auc": 0.9494688159325255,
+      "train_pr_auc": 0.9952808711976279,
+      "gap": 0.04581205526510235,
+      "precision_at_k": 0.3776923076923077,
+      "recall_at_k": 0.9684418145956607,
+      "per_pattern": {
+        "account_takeover": 0.9225806451612903,
+        "card_not_present": 1.0,
+        "card_testing": 0.9881889763779528,
+        "geo_impossible": 1.0,
+        "merchant_collusion": 0.9655172413793104
+      },
+      "trees": 116
+    },
+    {
+      "strategy": "is_unbalance",
+      "pr_auc": 0.9201044030042043,
+      "train_pr_auc": 1.0,
+      "gap": 0.07989559699579574,
+      "precision_at_k": 0.3638461538461538,
+      "recall_at_k": 0.9329388560157791,
+      "per_pattern": {
+        "account_takeover": 0.8387096774193549,
+        "card_not_present": 1.0,
+        "card_testing": 0.9881889763779528,
+        "geo_impossible": 0.9411764705882353,
+        "merchant_collusion": 0.8275862068965517
+      },
+      "trees": 1399
+    },
+    {
+      "strategy": "scale_pos_weight",
+      "pr_auc": 0.9201044030042043,
+      "train_pr_auc": 1.0,
+      "gap": 0.07989559699579574,
+      "precision_at_k": 0.3638461538461538,
+      "recall_at_k": 0.9329388560157791,
+      "per_pattern": {
+        "account_takeover": 0.8387096774193549,
+        "card_not_present": 1.0,
+        "card_testing": 0.9881889763779528,
+        "geo_impossible": 0.9411764705882353,
+        "merchant_collusion": 0.8275862068965517
+      },
+      "trees": 1399
+    },
+    {
+      "strategy": "undersample_1:50",
+      "pr_auc": 0.9418942101143684,
+      "train_pr_auc": 0.9999171845596952,
+      "gap": 0.05802297444532689,
+      "precision_at_k": 0.37538461538461537,
+      "recall_at_k": 0.9625246548323472,
+      "per_pattern": {
+        "account_takeover": 0.896774193548387,
+        "card_not_present": 1.0,
+        "card_testing": 0.9921259842519685,
+        "geo_impossible": 1.0,
+        "merchant_collusion": 0.9655172413793104
+      },
+      "trees": 294
+    }
+  ]
+}
