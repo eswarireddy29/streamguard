@@ -337,6 +337,7 @@ implementation is a new subclass, not a rewrite.
 > Fixed by rebuilding the venv with `py -3.11` and reinstalling.
 > Nothing was lost: code, database and Git history were untouched, which is
 > exactly why `requirements.txt` exists and `.venv/` is gitignored.
+
 ### Task 9 — Stream processor ✅ 19 Oct
 - `src/streamguard/eventlog/handlers.py` — `EventHandler` ABC with
   `handle()`, `on_start()`, `on_stop()`; `_handle_timed()` catches, counts and
@@ -368,13 +369,59 @@ implementation is a new subclass, not a rewrite.
   file — a handler that buffers writes loses its final partial batch without it.
 - **Signal handling:** first Ctrl+C finishes the batch and commits; second
   force-quits.
-
 **Known performance characteristic (not a bug):** throughput sawtooths
 ~24,000/s → ~6,000/s in a regular cycle. Cause: `poll()` seeks by skipping
 lines, so reaching offset 150,042 means opening segment 1 and skipping 50,042
 lines. Early offsets in a segment are fast, late ones slow. Kafka avoids this
 with a byte-offset index. Acceptable here — the consumer is sequential, and
 ~9,900/s drains the whole log in 80s.
+
+### Task 10 — Online feature engine ✅ 19 Oct
+- `src/streamguard/features/stats.py` — Welford's algorithm (verified against
+  numpy to 12 digits), `ExponentialMovingAverage`
+- `src/streamguard/features/state.py` — `CardState` with a `deque(maxlen=50)`,
+  bounded sets, `StateStore`. Memory bounded by ENTITY COUNT, not event count
+- `src/streamguard/features/computer.py` — **49 features**, `FEATURE_NAMES` as
+  the ordered column contract
+- `src/streamguard/features/writer.py` — chunked Parquet, explicit Arrow schema
+- `src/streamguard/features/handler.py` — plugs into the Task 9 processor
+- `scripts/build_features.py`, `check_features.py`, `test_stats.py`,
+  `test_features.py`
+
+**Output:** `data/processed/features.parquet` — 791,112 rows, 140 MB, 16 chunks,
+118s, 0 errors, **0 NaN/inf**.
+**Max 24h count = 26 vs RECENT_WINDOW = 50** — deque ceiling never binding.
+
+**THE GOVERNING RULE:** a feature at time T uses only events strictly before T.
+Enforced structurally: `compute_features()` reads state, `update_state()`
+writes it, `process()` is the only place the order is encoded.
+**Verified:** 10 txns at Rs 1,000 then one at Rs 50,000 → card mean still
+1,000.00, ratio 50× at compute time. No self-leakage.
+
+**Feature separation (fraud vs normal, mean ratio):**
+
+| Pattern | Best feature | Normal | Fraud | Ratio |
+|---|---|---|---|---|
+| card_testing | txn_count_5m | 0.009 | 1.841 | **203×** |
+| geo_impossible | implied_speed_kmh | 7.7 | 4,210 | **545×** |
+| merchant_collusion | merchant_amount_zscore | −0.014 | 0.783 | **−55×** |
+| card_not_present | is_manual_entry | 0.000 | 1.000 | **inf** |
+| account_takeover | is_new_device | 0.072 | 0.140 | 1.95× ⚠ |
+
+> **KNOWN WEAKNESS — account takeover.** No feature reaches 2× separation.
+> Diagnosis: `is_new_merchant` is 0.607 for *normal* traffic — with 800
+> merchants and ~108 transactions per card, novelty is the default, so it
+> carries little information. Amount deviation is drowned by legitimate
+> variance (a plane ticket is genuinely 10× a customer's mean).
+> **DECISION: proceed to Phase D, measure per-pattern recall in Task 15, then
+> add targeted features if warranted.** Adding features before measuring is
+> guessing. Trees may find interactions a mean-ratio comparison cannot see.
+
+> **KNOWN ARTEFACT:** `merchant_txn_count` is 82 for collusion merchants vs
+> 1,340 normal, because the six colluding merchants are a small fixed set. The
+> model may learn "low-volume merchant" rather than "inflated amounts" — a
+> shortcut that would not generalise. Check in Task 18 feature importance;
+> belongs in the report as a synthetic-data limitation.
 
 **DB state:** 791,112 transactions / 3,003 fraud / **0.380%**
 
