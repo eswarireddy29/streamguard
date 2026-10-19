@@ -444,6 +444,267 @@ with PASS/FAIL in two seconds.
 **Result: 23 passed in 2.13s**
 
 ---
+### Task 12 — Temporal split + baselines ✅ 19 Oct
+
+**Files:** `scripts/inspect_features.py`, `src/streamguard/ml/{__init__,splitter,
+metrics,baselines}.py`, `scripts/run_baselines.py`, `tests/test_splitter.py`
+
+**The split.** Days 1–63 train / 64–76 validation / 77–90 test, by **IST
+calendar day**, never random. Local midnight, not UTC — a UTC boundary
+puts 00:00–05:30 IST into the previous day, the same +5:30 displacement
+that hit the Task 6 generator.
+
+**Nuance worth defending:** a temporal split does NOT remove a card from
+both sides, and should not. In production you routinely score cards you
+have seen before. What the split removes is *future information* about
+that card.
+
+**No purging.** Purging (dropping rows at a block boundary) is needed
+when a feature looks forward. Task 10 proved every feature looks
+strictly backwards, so purging here would be cargo cult.
+
+**Sealed test set.** `split()` returns train and val only. Test requires
+`load_test(reason=...)` with a written reason, which appends to
+`data/processed/test_set_access.log`. It does not block access — it
+makes the access count visible. A test estimate is only honest while
+untouched.
+
+**Metrics.** PR-AUC is the headline; a random model scores exactly the
+prevalence, so every result prints `lift_over_random` beside it.
+precision@k is operational (analysts review ~100/day, k = 100 × days).
+ROC-AUC reported, never judged by. Accuracy computed once to prove it
+is useless: 99.56% while catching zero fraud.
+
+**Structural guards.** `FORBIDDEN_AS_FEATURES` raises if a label reaches
+the feature contract. `Block` keeps X, y and meta separate, so passing
+a label as a feature is not possible by typo. `resolve_column()` fails
+loudly with the available column list. float32 features halve memory.
+
+**Final numbers** (post-13.7 data; see Task 13.7 for why these changed):
+
+| block | days | rows | fraud | prevalence |
+|---|---|---|---|---|
+| train | 0–62  | 552,426 | 2,034 | 0.368% |
+| val   | 63–75 | 115,566 |   507 | 0.439% |
+| test  | 76–89 | 123,117 |   459 | 0.373% |
+| total |       | 791,109 | 3,000 |        |
+
+**Baselines on VALIDATION** (k = 1,300; random PR-AUC = 0.0044):
+
+| model | PR-AUC | lift | ROC-AUC | prec@k | recall@k |
+|---|---|---|---|---|---|
+| always_negative | 0.0044 | 1.0× | 0.5000 | n/a | n/a |
+| rules | 0.0045 | 1.0× | 0.5062 | 0.0085 | 0.0217 |
+| logistic_regression | 0.7062 | 161.0× | 0.9564 | 0.3023 | 0.7751 |
+
+`always_negative` is degenerate (identical scores); quote prec@k as n/a.
+
+**The rules baseline is a real finding, not a broken implementation.**
+On honest data it reaches 1.0× lift — no better than random. The
+velocity rule (>5 txns/5min) caught ZERO: `txn_count_5m` averages 1.868
+for card testing, so the threshold almost never fires. The speed rule
+caught 5. The ratio rule caught 5 of 779 flagged. **Pre-ML rule systems
+are close to useless against patterns that do not announce themselves —
+half the argument for ML.**
+
+**precision@k ceiling:** only 507 frauds exist in the block, so
+precision@1300 cannot exceed 507/1300 = 0.3900.
+
+### Task 13 — LightGBM ✅ 19 Oct
+
+**Files:** `src/streamguard/ml/lgbm.py`, `scripts/train_lgbm.py`,
+`scripts/inspect_model.py`
+
+**Settings and why.** `is_unbalance=True` (LightGBM's class_weight
+equivalent) prevents the degenerate "never fraud" solution at 0.368%
+prevalence — **cost: probabilities are NOT calibrated and read too
+high.** Ranking metrics unaffected; calibration is Task 15.
+`num_leaves=31`, `min_child_samples=100`: with only 2,034 training
+frauds, a leaf of three specific frauds would be memorisation.
+`n_jobs=6` of 12 threads — all 12 on 552k × 49 risks paging on 8 GB.
+Early stopping on validation **PR-AUC**, not log-loss: stop on the
+metric you judge by. Model saved as LightGBM text, not pickle — a
+pickle breaks silently across versions and executes code on load.
+
+**Result on VALIDATION** (1,399 of 2,000 trees, stopped early, 239s):
+
+| model | PR-AUC | lift | ROC-AUC | prec@k | recall@k |
+|---|---|---|---|---|---|
+| always_negative | 0.0044 | 1.0× | 0.5000 | n/a | n/a |
+| rules | 0.0045 | 1.0× | 0.5062 | 0.0085 | 0.0217 |
+| logistic_regression | 0.7062 | 161.0× | 0.9564 | 0.3023 | 0.7751 |
+| **lightgbm** | **0.9201** | **209.7×** | 0.9872 | **0.3638** | **0.9329** |
+
+**Per-pattern recall in the top 1,300 — where trees actually win:**
+
+| pattern | logistic | lightgbm | n |
+|---|---|---|---|
+| card_not_present | 100.0% | 100.0% | 52 |
+| card_testing | 90.2% | 98.8% | 254 |
+| geo_impossible | 70.6% | **94.1%** | 17 |
+| account_takeover | 52.3% | **83.9%** | 155 |
+| merchant_collusion | 65.5% | **82.8%** | 29 |
+
+**TASK 10 OPEN ITEM CLOSED.** Account takeover was the recorded weakest
+pattern (best single-feature separation 1.95×), with a decision to
+measure before adding features. Linear reaches 52.3%; trees reach
+83.9%. The Task 10 note predicted "trees may find interactions a
+mean-ratio comparison cannot see" — a 31-point lift is that prediction
+confirmed. **No targeted features needed.**
+
+**Why trees beat linear on geo_impossible.** `implied_speed_kmh` is
+non-monotonic with respect to fraud: card testing (half of all fraud)
+runs at near-zero speed, geo_impossible at thousands of km/h. A linear
+model picks ONE direction per feature and so ranks geo_impossible
+against itself. A tree splits `speed < 1` and `speed > 900` into
+separate leaves. 70.6% → 94.1%. *Caveat: n=17, so one fraud is worth
+5.9 points — read as direction, not a precise figure.*
+
+**Feature importance (gain).** Top three are the three signals the
+generator was designed around:
+
+| feature | gain | note |
+|---|---|---|
+| txn_count_5m | 32.39% | card-testing velocity |
+| is_manual_entry | 22.84% | card-not-present, definitional |
+| distance_from_home_km | 22.40% | geo_impossible |
+| merchant_amount_mean | 7.44% | merchant aggregates — the Task 10 design intent for collusion |
+| merchant_is_online | 4.71% | |
+| is_new_device | 0.61% | rank 9 — **was 58.65% before the 13.7 fix** |
+| merchant_txn_count | 0.26% | rank 16 |
+
+Top 5 features = 89.8% of gain; 3 of 49 never split on.
+
+**COLLUSION SHORTCUT — LOW RISK.** `merchant_txn_count` ranks 16 at
+0.26% of gain, so the model is not leaning on merchant volume. Gain
+importance splits credit between correlated features, so SHAP at Task
+18 is still the real check, but the Task 10 worry is not confirmed.
+
+**Overfitting: gap 0.0799** (train 1.0000, val 0.9201). Train PR-AUC
+hits 1.0 by iteration 400, then 1,000 more trees buy 0.009 of
+validation gain. **Task 14 tuning target: lower `num_leaves`, raise
+`min_child_samples`.** The script's "gap is modest" message is
+borderline at this level — do not take it at face value.
+
+---
+
+### Task 13.7 — THE GENERATOR LEAK (the most important thing in Phase D)
+
+**How it was found.** The v1 model scored PR-AUC 0.9932 and feature
+importance showed `is_new_device` carrying **58.65% of total gain** —
+a feature Task 10 had recorded as the WEAKEST signal in the project
+(1.95× separation) and which Task 12.5b did not place in the top 15
+single features. Three facts that could not all be true.
+
+**Root cause.** Four of five patterns passed `device_ref=None` to
+`_build()`. The feature engine reads a missing device as "a device this
+card has never used", so `is_new_device = 1.0000` on EVERY row of
+card_testing, card_not_present, geo_impossible and merchant_collusion,
+against 0.079 for normal traffic. The generator was marking its own
+fraud. Worse, account_takeover — the one pattern where a new device is
+genuinely the signal — was the only one with a realistic value (0.148).
+**The generator had it exactly inverted, because of a missing value,
+not a wrong one.**
+
+**Second leak, found by the same audit.** `distance_from_home_km` was
+exactly 0.0000 on all card_testing rows (1 unique value vs 539,907 for
+normal), because `_card_testing` used the customer's exact home
+coordinates with no jitter. And `_pick_merchant` draws uniformly across
+the whole country while normal traffic uses distance decay — so
+account_takeover sat at a median 925 km from home against normal's 2.3
+km, with even its 10th percentile above normal's 99th.
+
+**Third bug, pre-existing and silent.** 62.6% of card_not_present rows
+had `seconds_since_prev = 0`: the `t = t + timedelta(...)` line was
+missing from the CNP loop, so every transaction in an episode shared
+one timestamp. Distance divided by zero hit the 99,999 implied-speed
+sentinel. Nothing errored. 224 of 368 CNP gaps were exactly zero.
+
+**The fixes.**
+- `_pick_device(customer, prob)` — per-episode device choice with
+  realistic per-pattern probabilities in `fraud_patterns.py`:
+  card_testing 0.25 (card stolen, not the phone — and ONE device for
+  the whole burst, which is itself a signal the model must learn),
+  CNP 0.45, geo 0.10 (cloned physical card), collusion 0.08 (the
+  customer is genuine), ATO 0.80 (the attacker's own device).
+- `_pick_merchant_near(customer, pool, max_km)` — rejection sampling so
+  fraud merchants are local like normal ones. ATO 60 km, collusion 25 km.
+- `_merchant_collusion` now picks the MERCHANT first, then a customer
+  near it — a real complicit shop serves local customers.
+- card_testing coordinates jittered 4 km instead of pinned to home.
+- geo and collusion get a channel mix (85/88% POS) instead of all-POS,
+  which had pinned `is_card_present` to 1.0 and `is_ecommerce` to 0.0.
+- CNP clock advance restored.
+
+**Before and after:**
+
+| | before | after |
+|---|---|---|
+| `is_new_device` rank / gain | 1 / 58.65% | 9 / 0.61% |
+| `is_new_device`, 4 patterns | 1.0000, 1 unique value | 0.020–0.183, 2 values |
+| ATO distance from home (median) | 925 km | 12 km |
+| card_testing distance | 0.0000, 1 unique | 2.79 km, 79 values |
+| CNP zero-second gaps | 224 of 368 | 0 of 383 |
+| CONSTANT audit findings | 18 | 8 (all legitimate) |
+| logistic PR-AUC | 0.9247 | **0.7062** |
+| lightgbm PR-AUC | 0.9932 | **0.9201** |
+| lightgbm − logistic | 0.07 | **0.21** |
+
+**The numbers went DOWN and that is the result.** Before the fix both
+models were riding the same giveaway, so trees beat linear by only
+0.07. On honest data the gap is 0.21 — the trees are now earning their
+complexity instead of reading a label proxy.
+
+**New tooling (keep these — they are the proof):**
+- `scripts/audit_leakage.py` — checks every feature × pattern for
+  CONSTANT / DISJOINT / EXTREME. Run after any generator change.
+- `scripts/diagnose_baseline.py`, `diagnose_lgbm.py`, `diagnose_geo.py`,
+  `diagnose_time.py`
+- `tests/test_generator_integrity.py` — 4 tests: no binary feature
+  pinned per pattern, fraud episodes advance their clock, collisions
+  stay rare, fraud distance overlaps normal. **44 tests passing.**
+
+**The 8 remaining CONSTANT findings are legitimate, and the test has an
+explicit allow-list with a reason for each:** `txn_count_1m/5m = 0` for
+patterns whose gaps are minutes-to-hours apart is arithmetic, not
+leakage; `is_manual_entry = 1` for CNP is the definition of
+card-not-present; `merchant_is_online = 0` for collusion is the fixed
+six-merchant set, a known Task 10 limitation.
+
+**A trap worth recording:** normal rows carry the STRING `"none"` in
+`fraud_type`, not a null. A test filtering with `.notna()` matched all
+791k rows and reported 8 "fraud" duplicates that were ordinary Poisson
+collisions in normal traffic. Filter on `is_fraud`, not on
+`fraud_type.notna()`.
+
+**Interview talking points**
+
+*"My first LightGBM scored 0.9932, which I treated as a leakage suspect
+rather than a result. Feature importance showed one feature carrying
+58% of gain — a feature my own earlier analysis had recorded as the
+weakest signal I had. That contradiction was the thread. It turned out
+four of my five fraud patterns passed a null device ID, and my feature
+engine read null as 'new device', so the generator was labelling its own
+fraud. I fixed the generator, regenerated, and the score fell to 0.9201.
+The drop is the deliverable."*
+
+*"The interesting part is what the fix revealed. Before it, LightGBM
+beat logistic regression by 0.07 — both were reading the same giveaway.
+After it, the gap is 0.21, and account-takeover recall goes from 52% to
+84%. The trees are finding real interactions instead of a label proxy."*
+
+*"I also wrote an audit that checks every feature against every fraud
+pattern for constant values, and turned it into a test with an explicit
+allow-list — each exemption has a written reason. The rule is that a
+fraud pattern must SHIFT a feature's distribution, never pin it to a
+constant. Pinning is the generator telling the model the answer."*
+
+**HONESTY NOTE FOR README AND REPORT.** 0.9201 describes *my generator*.
+Five hand-written patterns encode my assumptions about fraud behaviour,
+and the features were designed knowing those patterns. A model that
+catches them has learned my patterns, not real-world fraud. Three
+separate label proxies were found and fixed; there may be more that
+this audit does not detect.
 
 #### The editable install — a structural fix
 
@@ -659,9 +920,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-
-**11 of 32 tasks complete. Phases A, B and C done. Starting TASK 12.**
-
+**13 of 32 tasks complete.**
 ### What exists and works right now
 
 | | |
@@ -671,7 +930,7 @@ alembic revision --autogenerate -m "description"
 | Event log | 791,112 events, 8 segments, offsets + replay verified |
 | Stream processor | ~6,700 events/s, 0 errors, resumption across processes verified |
 | Features | 49 features, `data/processed/features.parquet`, 140 MB, 0 NaN/inf |
-| Tests | 23 passing — leakage and integrity |
+|44 passing — leakage, integrity, split, generator; add rows: Data | 791,109 transactions, 3,000 fraud (0.379%) and Model | LightGBM, val PR-AUC 0.9201 (random 0.0044)
 
 ### Task 12 — what comes next
 **Verified numbers (19 Oct)**
