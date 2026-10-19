@@ -76,4 +76,4 @@ def jitter_coordinate(
     return (
         lat + distance * radius_deg_lat * math.sin(angle),
         lon + distance * radius_deg_lon * math.cos(angle),
-    )
+    )   

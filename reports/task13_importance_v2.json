@@ -1,0 +1,253 @@
+{
+  "tag": "v2",
+  "top_5_pct": 94.99163168483035,
+  "top_10_pct": 98.43108570942994,
+  "n_unused": 2,
+  "gain": [
+    {
+      "feature": "distance_from_home_km",
+      "gain": 26993294.980134733,
+      "pct": 46.83678756447443
+    },
+    {
+      "feature": "txn_count_5m",
+      "gain": 20258728.038241357,
+      "pct": 35.15146047015992
+    },
+    {
+      "feature": "is_manual_entry",
+      "gain": 4273333.797481732,
+      "pct": 7.414775684555634
+    },
+    {
+      "feature": "implied_speed_kmh",
+      "gain": 1922642.2968484657,
+      "pct": 3.3360280353412155
+    },
+    {
+      "feature": "amount",
+      "gain": 1298222.1387663318,
+      "pct": 2.252579930299151
+    },
+    {
+      "feature": "merchant_is_online",
+      "gain": 1005127.4799292572,
+      "pct": 1.7440235542681115
+    },
+    {
+      "feature": "amount_vs_merchant_mean",
+      "gain": 317720.130022408,
+      "pct": 0.551284689244797
+    },
+    {
+      "feature": "merchant_amount_mean",
+      "gain": 286938.9137418775,
+      "pct": 0.4978753781929844
+    },
+    {
+      "feature": "txn_count_24h",
+      "gain": 225757.25076050858,
+      "pct": 0.3917174395638359
+    },
+    {
+      "feature": "seconds_since_prev",
+      "gain": 146705.68979077923,
+      "pct": 0.254552963329863
+    },
+    {
+      "feature": "amount_ratio_card_ema",
+      "gain": 129803.75656739622,
+      "pct": 0.22522596725935323
+    },
+    {
+      "feature": "amount_zscore_customer",
+      "gain": 102217.70299239083,
+      "pct": 0.17736066841437725
+    },
+    {
+      "feature": "merchant_amount_zscore",
+      "gain": 96096.52761824577,
+      "pct": 0.1667396534232577
+    },
+    {
+      "feature": "merchant_amount_std",
+      "gain": 91297.37852735727,
+      "pct": 0.15841252156975089
+    },
+    {
+      "feature": "distance_from_prev_km",
+      "gain": 89962.0216150206,
+      "pct": 0.1560955081013361
+    },
+    {
+      "feature": "merchant_distinct_cards",
+      "gain": 83616.44280721007,
+      "pct": 0.14508512471487747
+    },
+    {
+      "feature": "hour_of_day",
+      "gain": 72952.89311493556,
+      "pct": 0.12658251464123374
+    },
+    {
+      "feature": "amount_zscore_card",
+      "gain": 43830.22965756589,
+      "pct": 0.0760510029206999
+    },
+    {
+      "feature": "amount_ratio_card_max",
+      "gain": 26971.47519550959,
+      "pct": 0.046798927472998283
+    },
+    {
+      "feature": "is_ecommerce",
+      "gain": 20351.350685797282,
+      "pct": 0.035312172501441336
+    },
+    {
+      "feature": "merchant_txn_count",
+      "gain": 17047.068134022644,
+      "pct": 0.029578823532952582
+    },
+    {
+      "feature": "distinct_cities_24h",
+      "gain": 14865.563755992898,
+      "pct": 0.02579363698199821
+    },
+    {
+      "feature": "card_txn_count",
+      "gain": 12782.207668633855,
+      "pct": 0.02217875015337648
+    },
+    {
+      "feature": "is_card_present",
+      "gain": 10435.20935526921,
+      "pct": 0.01810641065209893
+    },
+    {
+      "feature": "velocity_ratio_5m_24h",
+      "gain": 9993.377477591675,
+      "pct": 0.017339776352387655
+    },
+    {
+      "feature": "is_new_device",
+      "gain": 9900.841003042384,
+      "pct": 0.01717921384219317
+    },
+    {
+      "feature": "amount_sum_24h",
+      "gain": 9422.133043273345,
+      "pct": 0.01634859486686519
+    },
+    {
+      "feature": "card_age_days",
+      "gain": 8614.448381358365,
+      "pct": 0.014947159623148696
+    },
+    {
+      "feature": "amount_ratio_card_mean",
+      "gain": 7391.226978155155,
+      "pct": 0.012824715473654907
+    },
+    {
+      "feature": "merchant_novelty_rate",
+      "gain": 5765.143181735639,
+      "pct": 0.010003254018468202
+    },
+    {
+      "feature": "distinct_countries_24h",
+      "gain": 4678.397478110361,
+      "pct": 0.008117612502871043
+    },
+    {
+      "feature": "is_night",
+      "gain": 4428.526485770024,
+      "pct": 0.007684054665808857
+    },
+    {
+      "feature": "txn_count_1h",
+      "gain": 4227.215460555759,
+      "pct": 0.007334754525559731
+    },
+    {
+      "feature": "distinct_mccs_1h",
+      "gain": 4036.091827220911,
+      "pct": 0.0070031308012369845
+    },
+    {
+      "feature": "day_of_week",
+      "gain": 3812.35060190074,
+      "pct": 0.006614911421296591
+    },
+    {
+      "feature": "amount_log",
+      "gain": 3767.5511857811507,
+      "pct": 0.0065371787570423796
+    },
+    {
+      "feature": "card_distinct_merchants",
+      "gain": 3612.363178404037,
+      "pct": 0.006267907897763247
+    },
+    {
+      "feature": "distinct_merchants_1h",
+      "gain": 3165.345303989983,
+      "pct": 0.005492275236509328
+    },
+    {
+      "feature": "card_distinct_mccs",
+      "gain": 2786.8390818126686,
+      "pct": 0.004835518974148721
+    },
+    {
+      "feature": "is_new_city",
+      "gain": 2031.1142423584242,
+      "pct": 0.003524240607103724
+    },
+    {
+      "feature": "is_new_merchant",
+      "gain": 1838.2911943259533,
+      "pct": 0.0031896681829192124
+    },
+    {
+      "feature": "is_new_mcc",
+      "gain": 1068.3683815455297,
+      "pct": 0.001853754532889544
+    },
+    {
+      "feature": "amount_sum_1h",
+      "gain": 892.6203880274538,
+      "pct": 0.0015488094921545556
+    },
+    {
+      "feature": "is_speed_implausible",
+      "gain": 500.93842292108457,
+      "pct": 0.0008691916460922762
+    },
+    {
+      "feature": "is_weekend",
+      "gain": 42.64592344209086,
+      "pct": 7.399608155351177e-05
+    },
+    {
+      "feature": "is_new_country",
+      "gain": 1.3237524311698508,
+      "pct": 2.2968782229915596e-06
+    },
+    {
+      "feature": "txn_count_1m",
+      "gain": 0.3410992430654005,
+      "pct": 5.91850413134612e-07
+    },
+    {
+      "feature": "is_first_transaction",
+      "gain": 0.0,
+      "pct": 0.0
+    },
+    {
+      "feature": "is_foreign_country",
+      "gain": 0.0,
+      "pct": 0.0
+    }
+  ]
+}

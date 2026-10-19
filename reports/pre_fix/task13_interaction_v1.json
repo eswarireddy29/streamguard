@@ -1,0 +1,161 @@
+{
+  "tag": "v1",
+  "top_features": [
+    "is_new_device",
+    "distance_from_home_km",
+    "is_card_present",
+    "card_distinct_mccs",
+    "implied_speed_kmh",
+    "seconds_since_prev"
+  ],
+  "pair_findings": [
+    {
+      "f1": "is_new_device",
+      "f2": "distance_from_home_km",
+      "fraud": 1207,
+      "normal": 1367,
+      "fraud_rate": 0.4689199689199689
+    },
+    {
+      "f1": "is_new_device",
+      "f2": "is_card_present",
+      "fraud": 1528,
+      "normal": 12197,
+      "fraud_rate": 0.1113296903460838
+    },
+    {
+      "f1": "is_new_device",
+      "f2": "card_distinct_mccs",
+      "fraud": 209,
+      "normal": 2555,
+      "fraud_rate": 0.0756150506512301
+    },
+    {
+      "f1": "is_new_device",
+      "f2": "implied_speed_kmh",
+      "fraud": 1110,
+      "normal": 8480,
+      "fraud_rate": 0.11574556830031282
+    },
+    {
+      "f1": "is_new_device",
+      "f2": "seconds_since_prev",
+      "fraud": 1204,
+      "normal": 10148,
+      "fraud_rate": 0.10606060606060606
+    },
+    {
+      "f1": "distance_from_home_km",
+      "f2": "is_card_present",
+      "fraud": 42,
+      "normal": 172,
+      "fraud_rate": 0.19626168224299065
+    },
+    {
+      "f1": "distance_from_home_km",
+      "f2": "card_distinct_mccs",
+      "fraud": 154,
+      "normal": 4655,
+      "fraud_rate": 0.03202328966521106
+    },
+    {
+      "f1": "distance_from_home_km",
+      "f2": "implied_speed_kmh",
+      "fraud": 1101,
+      "normal": 7088,
+      "fraud_rate": 0.1344486506288924
+    },
+    {
+      "f1": "distance_from_home_km",
+      "f2": "seconds_since_prev",
+      "fraud": 1088,
+      "normal": 5267,
+      "fraud_rate": 0.17120377655389457
+    },
+    {
+      "f1": "is_card_present",
+      "f2": "card_distinct_mccs",
+      "fraud": 35,
+      "normal": 2886,
+      "fraud_rate": 0.011982197877439232
+    },
+    {
+      "f1": "is_card_present",
+      "f2": "implied_speed_kmh",
+      "fraud": 164,
+      "normal": 7251,
+      "fraud_rate": 0.022117329737019555
+    },
+    {
+      "f1": "is_card_present",
+      "f2": "seconds_since_prev",
+      "fraud": 1196,
+      "normal": 50936,
+      "fraud_rate": 0.02294176321645055
+    },
+    {
+      "f1": "card_distinct_mccs",
+      "f2": "implied_speed_kmh",
+      "fraud": 180,
+      "normal": 2255,
+      "fraud_rate": 0.07392197125256673
+    },
+    {
+      "f1": "card_distinct_mccs",
+      "f2": "seconds_since_prev",
+      "fraud": 154,
+      "normal": 3682,
+      "fraud_rate": 0.040145985401459854
+    },
+    {
+      "f1": "implied_speed_kmh",
+      "f2": "seconds_since_prev",
+      "fraud": 25,
+      "normal": 30,
+      "fraud_rate": 0.45454545454545453
+    }
+  ],
+  "ablation": [
+    {
+      "round": 0,
+      "n_features": 49,
+      "dropped": [],
+      "pr_auc": 0.993010683400278,
+      "geo_recall": 1.0,
+      "ato_recall": 1.0
+    },
+    {
+      "round": 1,
+      "n_features": 48,
+      "dropped": [
+        "is_new_device"
+      ],
+      "pr_auc": 0.9871382217394291,
+      "geo_recall": 1.0,
+      "ato_recall": 1.0
+    },
+    {
+      "round": 2,
+      "n_features": 47,
+      "dropped": [
+        "is_new_device",
+        "distance_from_home_km"
+      ],
+      "pr_auc": 0.9464230865544455,
+      "geo_recall": 0.92,
+      "ato_recall": 0.9767441860465116
+    },
+    {
+      "round": 3,
+      "n_features": 46,
+      "dropped": [
+        "is_new_device",
+        "distance_from_home_km",
+        "is_card_present"
+      ],
+      "pr_auc": 0.956333551374551,
+      "geo_recall": 0.88,
+      "ato_recall": 0.9767441860465116
+    }
+  ]
+}

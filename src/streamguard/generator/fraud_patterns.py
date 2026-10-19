@@ -115,6 +115,64 @@ CNP_AMOUNT_MULTIPLIER_MAX = 9.0
 CNP_GAP_MINUTES_MIN = 3
 CNP_GAP_MINUTES_MAX = 180
 
+# --- Fraud merchant locality  (Task 13.7C fix) ---------------------
+# Normal traffic: median 2.3 km from home, p99 21.7 km (distance decay
+# in transactions.py). Fraud used uniform random merchant selection
+# across the whole country, so distance_from_home_km separated fraud
+# from normal by construction.
+#
+# account_takeover: the attacker shops where the victim would not, so
+# SOME distance increase is realistic - but tens of km, not hundreds.
+ATO_MERCHANT_MAX_KM = 60.0
+
+# merchant_collusion: the CUSTOMER is genuine and shops locally. Only
+# the merchant is dishonest. Should look like normal traffic.
+COLLUSION_MERCHANT_MAX_KM = 25.0
+
+# ============================================================
+#  Device and channel realism  (Task 13.7 fix)
+# ============================================================
+# BUG FIXED: four of five patterns passed device_ref=None, which the
+# feature engine read as "a device this card has never used". Result:
+# is_new_device = 1.0000 on every row of those four patterns vs 0.079
+# for normal traffic - a label proxy carrying 58.65% of model gain.
+#
+# A fraud pattern must SHIFT a feature's distribution, never pin it to
+# a constant. These are per-EPISODE probabilities that the attacker
+# uses a device the card has not been seen with.
+
+# card_testing: the CARD NUMBER is stolen, not the phone. The fraudster
+# probes from their own machine, reusing it across the burst.
+CARD_TESTING_NEW_DEVICE_PROB = 0.25
+
+# card_not_present: stolen details used online. Could be any device.
+CNP_NEW_DEVICE_PROB = 0.45
+
+# geo_impossible: a physically cloned card swiped at a terminal. The
+# device is largely irrelevant, so it should look like normal traffic.
+GEO_NEW_DEVICE_PROB = 0.10
+
+# merchant_collusion: the CUSTOMER is genuine and so is their device.
+# The merchant is the anomaly.
+COLLUSION_NEW_DEVICE_PROB = 0.08
+
+# account_takeover: the attacker controls the account from their OWN
+# device. The one pattern where a new device is genuinely the signal.
+ATO_NEW_DEVICE_PROB = 0.80
+
+# --- Channel mixes -------------------------------------------------
+# geo_impossible and merchant_collusion previously used Channel.POS
+# exclusively, pinning is_card_present to 1.0 and is_ecommerce to 0.0.
+# A minority of the other channel turns a constant into a shift.
+GEO_POS_SHARE = 0.85
+COLLUSION_POS_SHARE = 0.88
+
+# --- Card testing location -----------------------------------------
+# BUG FIXED: card_testing used the customer's exact home coordinates
+# with no jitter, so distance_from_home_km was exactly 0.0000 on all
+# 1,165 rows (normal traffic has 539,907 distinct values).
+CARD_TESTING_JITTER_KM = 4.0
+
 
 def validate_shares() -> None:
     """Fail fast if the pattern shares do not sum to 1."""

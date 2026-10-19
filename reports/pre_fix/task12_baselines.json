@@ -1,0 +1,125 @@
+{
+  "created_at": "2026-10-19T14:48:22",
+  "block": "validation",
+  "alerts_per_day": 100,
+  "val_days": 13,
+  "random_pr_auc": 0.0037405512117827363,
+  "results": [
+    {
+      "model": "always_negative",
+      "block": "val",
+      "n": 115491,
+      "n_fraud": 432,
+      "prevalence": 0.0037405512117827363,
+      "pr_auc": 0.0037405512117827363,
+      "pr_auc_random": 0.0037405512117827363,
+      "lift_over_random": 1.0,
+      "roc_auc": 0.5,
+      "k": 1300,
+      "alerts_per_day": 100,
+      "precision_at_k": 0.002307692307692308,
+      "recall_at_k": 0.006944444444444444,
+      "fraud_caught_at_k": 3,
+      "accuracy_always_negative": 0.9962594487882173,
+      "per_pattern_recall_at_k": {
+        "account_takeover": 0.023255813953488372,
+        "card_not_present": 0.0,
+        "card_testing": 0.0,
+        "geo_impossible": 0.0,
+        "merchant_collusion": 0.022727272727272728
+      },
+      "per_pattern_n": {
+        "account_takeover": 86,
+        "card_not_present": 50,
+        "card_testing": 227,
+        "geo_impossible": 25,
+        "merchant_collusion": 44
+      },
+      "binary_precision": 0.0,
+      "binary_recall": 0.0,
+      "binary_f1": 0.0,
+      "binary_flagged": 0,
+      "notes": [
+        "every score identical - ranking metrics are degenerate",
+        "accuracy would be 99.63% while catching 0 fraud",
+        "all scores identical - ranking metrics are degenerate"
+      ]
+    },
+    {
+      "model": "rules",
+      "block": "val",
+      "n": 115491,
+      "n_fraud": 432,
+      "prevalence": 0.0037405512117827363,
+      "pr_auc": 0.014592344515661314,
+      "pr_auc_random": 0.0037405512117827363,
+      "lift_over_random": 3.901121436245928,
+      "roc_auc": 0.5565085287966592,
+      "k": 1300,
+      "alerts_per_day": 100,
+      "precision_at_k": 0.040769230769230766,
+      "recall_at_k": 0.12268518518518519,
+      "fraud_caught_at_k": 53,
+      "accuracy_always_negative": 0.9962594487882173,
+      "per_pattern_recall_at_k": {
+        "account_takeover": 0.18604651162790697,
+        "card_not_present": 0.26,
+        "card_testing": 0.0,
+        "geo_impossible": 0.36,
+        "merchant_collusion": 0.3409090909090909
+      },
+      "per_pattern_n": {
+        "account_takeover": 86,
+        "card_not_present": 50,
+        "card_testing": 227,
+        "geo_impossible": 25,
+        "merchant_collusion": 44
+      },
+      "binary_precision": 0.057649667405764965,
+      "binary_recall": 0.12037037037037036,
+      "binary_f1": 0.07796101949025487,
+      "binary_flagged": 902,
+      "notes": [
+        "score is the number of rules fired (0-3); many ties"
+      ]
+    },
+    {
+      "model": "logistic_regression",
+      "block": "val",
+      "n": 115491,
+      "n_fraud": 432,
+      "prevalence": 0.0037405512117827363,
+      "pr_auc": 0.9299450736298821,
+      "pr_auc_random": 0.0037405512117827363,
+      "lift_over_random": 248.6117743022887,
+      "roc_auc": 0.9980754237841907,
+      "k": 1300,
+      "alerts_per_day": 100,
+      "precision_at_k": 0.3230769230769231,
+      "recall_at_k": 0.9722222222222222,
+      "fraud_caught_at_k": 420,
+      "accuracy_always_negative": 0.9962594487882173,
+      "per_pattern_recall_at_k": {
+        "account_takeover": 0.9767441860465116,
+        "card_not_present": 1.0,
+        "card_testing": 1.0,
+        "geo_impossible": 0.8,
+        "merchant_collusion": 0.8863636363636364
+      },
+      "per_pattern_n": {
+        "account_takeover": 86,
+        "card_not_present": 50,
+        "card_testing": 227,
+        "geo_impossible": 25,
+        "merchant_collusion": 44
+      },
+      "binary_precision": 0.23737373737373738,
+      "binary_recall": 0.9791666666666666,
+      "binary_f1": 0.3821138211382114,
+      "binary_flagged": 1782,
+      "notes": [
+        "class_weight='balanced' - probabilities are NOT calibrated"
+      ]
+    }
+  ]
+}

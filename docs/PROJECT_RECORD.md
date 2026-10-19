@@ -674,6 +674,160 @@ alembic revision --autogenerate -m "description"
 | Tests | 23 passing — leakage and integrity |
 
 ### Task 12 — what comes next
+**Verified numbers (19 Oct)**
+
+| block | days | rows | fraud | prevalence |
+|---|---|---|---|---|
+| train | 0–62  | 552,521 | 2,129 | 0.385% |
+| val   | 63–75 | 115,491 |   432 | 0.374% |
+| test  | 76–89 | 123,100 |   442 | 0.359% |
+| total |       | 791,112 | 3,003 |        |
+
+57 columns = 49 features + 8 metadata. Rows and fraud sum exactly.
+
+**Baselines on VALIDATION** (k = 1,300 = 100 analyst reviews × 13 days;
+random PR-AUC = 0.0037):
+
+| model | PR-AUC | lift | ROC-AUC | prec@k | recall@k |
+|---|---|---|---|---|---|
+| always_negative | 0.0037 | 1.0× | 0.5000 | n/a | n/a |
+| rules | 0.0146 | 3.9× | 0.5565 | 0.0408 | 0.1227 |
+| logistic_regression | 0.9299 | 248.6× | 0.9981 | 0.3231 | 0.9722 |
+
+`always_negative`'s prec@k and recall@k are **degenerate** — every score is
+identical, so argsort returns rows in chronological order, which happened
+to contain 3 frauds (chance would give ~4.8). Quote them as n/a. Its
+PR-AUC equals prevalence and ROC-AUC is exactly 0.5000, the textbook
+values for a model with no information.
+
+`rules` caught ~53 of 432 frauds. Expected: `txn_count_5m` averages 1.841
+for card_testing, so a `>5` threshold fires only on the tail of those
+bursts; the speed rule can reach at most geo_impossible (25 in this
+block); and no rule targets account_takeover at all. **One fraud in eight
+is what pre-ML rule systems achieve here — half the argument for ML.**
+
+**Why precision@1300 cannot exceed 0.332:** only 432 frauds exist in the
+block. The logistic model's 0.3231 is 97% of that ceiling.
+
+---
+
+#### Task 12.5b — leakage diagnostic (`scripts/diagnose_baseline.py`)
+
+A linear model scoring 0.93 on fraud detection demanded investigation
+before being written down. Three checks:
+
+**1. Perfect separators: NONE.** No feature's fraud and normal value
+ranges fail to overlap. A leaked label would almost certainly show here.
+
+**2. Ablation decays gracefully, it does not collapse.** Leakage looks
+like a cliff — remove the leaked column, score falls to near-random.
+
+| features | PR-AUC | last dropped |
+|---|---|---|
+| 49 | 0.9299 | — |
+| 46 | 0.8894 | distance_from_home_km, distance_from_prev_km, implied_speed_kmh |
+| 43 | 0.8798 | distinct_merchants_1h, txn_count_1h, distinct_mccs_1h |
+| 40 | 0.8022 | txn_count_5m, is_new_city, merchant_amount_zscore |
+| 37 | 0.7585 | txn_count_24h, distinct_cities_24h, is_manual_entry |
+
+With the twelve strongest features gone it still scores 0.7585 = **205×
+random**. The signal is distributed, not carried by a giveaway.
+
+**3. Strongest single features (validation, no model fitted):**
+
+| feature | PR-AUC alone | direction |
+|---|---|---|
+| distance_from_home_km | 0.5476 | low=fraud |
+| distance_from_prev_km | 0.4863 | low=fraud |
+| implied_speed_kmh | 0.4862 | low=fraud |
+| distinct_merchants_1h | 0.4028 | high=fraud |
+| txn_count_1h | 0.4019 | high=fraud |
+| distinct_mccs_1h | 0.3806 | high=fraud |
+| txn_count_5m | 0.3517 | high=fraud |
+
+Seven features each at 95–150× random. A linear combination reaching
+0.93 is unremarkable. **Conclusion: not leakage.** The generator produces
+fraud that is genuinely separable with the features built for it — which
+it should, since the features were designed knowing the patterns. That is
+the honest statement, and it belongs in the README.
+
+**A hypothesis that was tested and killed:** `is_manual_entry` was
+predicted to be a perfect separator, since Task 10 recorded 1.000 fraud
+vs 0.000 normal. It ranks 12th at 0.1190. Task 10's figure was *within
+the card_not_present pattern*, which is 50 of 432 frauds. A feature that
+perfectly flags 11% of fraud is a weak overall ranker.
+
+---
+
+#### Per-pattern recall in the top 1,300 (logistic, validation)
+
+| pattern | recall | n |
+|---|---|---|
+| card_not_present | 100.0% | 50 |
+| card_testing | 100.0% | 227 |
+| account_takeover | 97.7% | 86 |
+| merchant_collusion | 88.6% | 44 |
+| geo_impossible | 80.0% | 25 |
+
+**OPEN ITEM FROM TASK 10 — CLOSED.** Account takeover was flagged as the
+known weakness (best feature separation only 1.95×), with a decision to
+measure before adding features. It reaches 97.7% recall. Many weak
+signals combined beat one strong signal alone. **No targeted features
+needed. Do not add them.**
+
+**NEW FINDING — geo_impossible is the WORST pattern despite having the
+STRONGEST single-feature separation (545×).** The cause is in the
+direction column above: `implied_speed_kmh` resolves to *low = fraud*,
+the opposite of geo_impossible. card_testing is 53% of fraud and runs at
+distance ≈ 0 and speed ≈ 0, so the majority pattern sets the feature's
+direction. **A linear model can only pick one direction per feature and
+cannot represent fraud living at both extremes** — so it ranks
+geo_impossible against itself. Same effect on `amount` (low=fraud,
+driven by ₹50 card-testing).
+
+> **PREDICTION FOR TASK 13:** LightGBM should lift geo_impossible recall
+> well above 80%, because a tree can place `implied_speed < 1` and
+> `implied_speed > 900` in separate leaves. If it does not, investigate
+> the tree model. This is a better test of Task 13 than watching the
+> headline PR-AUC move from 0.93 to 0.95.
+
+*Caveat:* n=25, so one missed fraud moves that recall by 4 points. Read
+80% as "about 20 of 25".
+
+**Known limitation of the diagnostic itself:** `single_feature_ap` tries
+the feature and its negation and keeps the better score, so it measures
+*monotonic ranking power*, not separability. For a feature where fraud
+sits at both extremes it reports the majority direction and understates
+the feature. `implied_speed_kmh` is more useful to a tree than 0.4862
+suggests.
+
+**Interview talking point**
+
+*"My linear baseline scored PR-AUC 0.93, which was high enough that I
+treated it as a leakage suspect rather than a result. I ran three checks:
+no feature perfectly separated the classes; ablation decayed gracefully
+from 0.93 to 0.76 rather than collapsing; and seven features each scored
+0.35–0.55 alone, so no single one carried it. Not leakage — my generator
+is separable by design, and I say so in the README. The diagnostic also
+found something I hadn't predicted: my weakest-separation pattern,
+account takeover, hit 97.7% recall, while my strongest, geo-impossible,
+was worst at 80%. A linear model has to choose one direction per feature,
+and because card testing is half my fraud and runs at near-zero speed,
+'low speed' won — so the model ranks the impossible-travel cases against
+themselves. That gave me a specific prediction for the tree model to
+beat."*
+
+- ~~Account takeover features are weak~~ **CLOSED at Task 12.5b** —
+  97.7% recall at k=1,300. No targeted features needed.
+- **NEW:** geo_impossible is the weakest pattern (80%, n=25) because
+  linear models cannot use a non-monotonic feature. Expect trees to fix
+  it at Task 13; verify rather than assume.
+- **NEW:** README and report must state that the generator produces
+  separable fraud by design, so 0.93 describes the generator, not the
+  real world.
+- Collusion shortcut risk: `merchant_txn_count` — still open, check at
+  Task 18 feature importance. (merchant_collusion 88.6% recall now.)
+- psycopg ResourceWarning — still open, fix before Phase E.
 
 **Temporal train/test split + baseline models.**
 
