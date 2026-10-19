@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
-**Last updated:** 18 Oct 2026
-**Status:** Phase A complete, Phase B complete (Tasks 1–7). Starting Task 8.
+**Last updated:** 19 Oct 2026
+**Status:** Phases A, B and C complete (Tasks 1–11). Starting Task 12.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -125,9 +125,12 @@ Generator/Replay -> Event Log (append-only, ordered, consumer offsets)
   -> DuckDB/Parquet offline store -> training -> MLflow -> model registry
   -> React dashboards (live stream, analyst queue, risk KPIs, drift)
 
-**OPEN DECISION (due at Task 8):** whether the event log is a lightweight
-file-backed log I write myself, or real Apache Kafka via WSL2. 8 GB RAM makes
-Kafka risky. **Not decided yet — my call to make.**
+**DECIDED at Task 8 — Option A: self-built file-backed event log, NOT Kafka.**
+Reason: Kafka's JVM (~1.5–2 GB) plus WSL2 (~1 GB) against 8 GB total, with
+PostgreSQL + VS Code + Chrome + React dev server all needed at once in Phase F.
+Producer and consumer sit behind abstract base classes, so a Kafka
+implementation would be a new subclass, not a rewrite. **This is settled — do
+not reopen it.**
 
 ---
 
@@ -146,12 +149,12 @@ Kafka risky. **Not decided yet — my call to make.**
 
 **PHASE C — STREAMING**
 8. ✅Event log design + producer
-9. ⬜ **← CURRENT.**Consumer with offsets + replay
-10. ⬜ Online feature engine (rolling windows, velocity, z-scores)
-11. ⬜ Offline feature store + point-in-time correctness + leakage tests
+9. ✅Consumer with offsets + replay
+10.✅Online feature engine (rolling windows, velocity, z-scores)
+11.✅ Offline feature store + point-in-time correctness + leakage tests
 
 **PHASE D — MACHINE LEARNING**
-12. ⬜ Train/test split by **time** (never random) + baseline model
+12. ⬜**← CURRENT.** Train/test split by **time** (never random) + baseline model
 13. ⬜ LightGBM training pipeline
 14. ⬜ Class imbalance handling + hyperparameter tuning
 15. ⬜ Evaluation: PR-AUC, precision@k, calibration curve
@@ -422,6 +425,129 @@ writes it, `process()` is the only place the order is encoded.
 > model may learn "low-volume merchant" rather than "inflated amounts" — a
 > shortcut that would not generalise. Check in Task 18 feature importance;
 > belongs in the report as a synthetic-data limitation.
+### Task 11 — Automated leakage test suite ✅ 19 Oct
+
+**WHY THIS TASK EXISTS.** Leakage is the failure mode that kills ML projects,
+and it is *silent*: nothing crashes, and results look BETTER than they should.
+Every check before this one required me to run a script, read numbers, and
+judge whether they looked right. That works while the project is fresh in my
+mind. It stops working three weeks later when I change a feature and do not
+remember what the correct value was. A test suite replaces human judgement
+with PASS/FAIL in two seconds.
+
+**Files created**
+- `pyproject.toml` — project metadata + pytest config in one file
+- `tests/conftest.py` — shared fixtures (pytest finds this name automatically)
+- `tests/test_no_leakage.py` — 14 tests across 4 classes
+- `tests/test_feature_file.py` — 9 integrity tests on the Parquet output
+
+**Result: 23 passed in 2.13s**
+
+---
+
+#### The editable install — a structural fix
+
+`pytest` failed at first with `ModuleNotFoundError: No module named
+'streamguard'`. Root cause: pytest did not know `src/` was on the import path.
+
+Rather than patching it with a `pytest.ini`, I fixed it properly:
+`pyproject.toml` declares the project, and `pip install -e .` installs it into
+the venv in **editable mode** — a link to `src/`, not a copy, so edits take
+effect immediately with no reinstall.
+
+`import streamguard` now works from anywhere: tests, scripts, notebooks, and
+(in Phase E) the FastAPI service. The `sys.path.insert(0, ...)` line at the
+top of older scripts is now redundant, though harmless.
+
+*Verified:* `python -c "import streamguard; print(streamguard.__file__)"` →
+`C:\Users\eshur\projects\streamguard\src\streamguard\__init__.py`
+
+---
+
+#### THE DECISIVE TEST
+
+`test_is_fraud_does_not_change_features` is the one that matters most.
+
+Compute features for a transaction with `is_fraud=True`. Then compute them for
+the *identical* transaction with `is_fraud=False`, in a fresh `StateStore`.
+Assert every one of the 49 features is identical.
+
+**If any feature read the label, the two outputs would differ.** This is direct
+proof, not code review. Reading the code and concluding it looks correct is
+how leakage survives; constructing a case where leakage would be *visible in a
+number* is how you actually find it.
+
+The same proof runs for `fraud_type` across all five patterns.
+
+---
+
+#### Test coverage
+
+| Class | What it guards |
+|---|---|
+| `TestForbiddenFields` | Labels never influence features. Features still compute when `is_fraud`/`fraud_type` are **absent entirely** — as they are in production, where the label is what you are predicting. `risk_score` confirmed absent from the payload. |
+| `TestStateOrdering` | A transaction must not contribute to its own statistics. Amount excluded from its own mean (ratio 50×, not 9×). Current txn excluded from velocity counts. Novelty reflects the past only. `compute_features()` is pure — calling it twice changes nothing. |
+| `TestTemporalCorrectness` | A later transaction cannot change an earlier one's features. First-transaction defaults are all defined. Window boundaries count correctly at the edge. |
+| `TestDeterminism` | Two computers fed identical events agree exactly (divergence would mean hidden state — dict ordering, an unseeded random draw, a clock read). No NaN or infinity on deliberately awkward inputs. Feature vector order is stable. |
+
+`tests/test_feature_file.py` validates the *output* rather than the logic: all
+49 columns present, row count matches the database, `transaction_ref` unique
+(a duplicate means an event was processed twice), offsets contiguous 0..N-1,
+rows chronological, no NaN/inf, fraud rate within 2× of configured, all five
+fraud types present, all amounts positive.
+
+---
+
+#### A test that has never failed cannot be trusted
+
+So I broke it on purpose. In `computer.py`, swapped the two lines in
+`process()` so `update_state()` ran *before* `compute_features()` — which
+introduces self-leakage.
+tests/test_no_leakage.py::TestStateOrdering::test_novelty_reflects_past_only FAILED
+assert first[“is_new_merchant”] == 1.0
+E assert 0.0 == 1.0
+
+The first-ever visit to a merchant came back as "not new", because
+`update_state()` had already recorded it. **Caught in 0.30 seconds.** Restored
+the correct order → 23 passed.
+
+Note which test fired: *novelty*, not the ₹50,000 mean test. Novelty breaks on
+a single transaction; the mean test needs ten before distortion is visible.
+Multiple independent tests catching the same bug from different angles is what
+a good suite looks like.
+
+---
+
+#### Design notes
+
+- **A fresh `FeatureComputer` per test**, via fixture. Tests must not affect
+  each other — leftover state makes results depend on execution order, which
+  produces failures that appear and vanish randomly (*test pollution*).
+- **`make_payload()` gives every field a default**, so each test overrides only
+  what it cares about and stays focused on one behaviour.
+- **The `feature_file` fixture skips** rather than fails when
+  `features.parquet` is missing, so the suite still runs on a fresh clone.
+
+#### Commands
+pytest # everything (23 tests)
+pytest tests/test_no_leakage.py # fast, no feature file needed
+pytest -m “not slow” # skip file-based tests
+pytest -x # stop at first failure
+pytest --tb=long # full error traces
+
+#### Known cosmetic issue
+
+`ResourceWarning: connection ... was deleted while still open` from psycopg
+during `test_row_count_matches_database`. Harmless now, but worth fixing before
+Phase E — with a connection pool of 5, leaked connections become a hang.
+
+#### Interview talking point
+
+*"I wrote a test that computes features for the same transaction twice — once
+labelled fraud, once not — and asserts every feature is identical. If any
+feature read the label, they would differ. Then I deliberately inverted the
+state-update order to confirm the suite catches self-leakage. It did, in 0.3
+seconds."*
 
 **DB state:** 791,112 transactions / 3,003 fraud / **0.380%**
 
@@ -454,6 +580,9 @@ Six fixed collusion merchants, because collusion is a property of the merchant.
 assumptions about fraud behaviour. A model that catches them has learned my
 patterns, not real-world fraud.
 
+---
+
+## APPENDIX — Task 6 and Task 7 detail (content below belongs to those tasks, not Task 11)
 **DB state:** ~788,000 transactions over 90 days, `is_fraud = false` on all of
 them (fraud is Task 7)
 
@@ -484,15 +613,15 @@ them (fraud is Task 7)
 ---
 
 ## COMMIT HISTORY
-0e1cc41  Task 6: transaction generator with realistic temporal patterns (IST fix)
-e191598  Task 5: population generator and PostgreSQL loader
-846daa6  Task 5.1: reference data and geographic helpers
-2ab5b20  Task 4B: database schema with eight tables and Alembic migrations
-511a694  Task 4A: PostgreSQL connection, session management, health check
-bf30d15  Task 3: configuration management and structured logging
-e164c0e  Task 2: add pinned dependencies for app and development
-f4f9821  Task 1: project skeleton, virtual environment, gitignore
+Tasks 1-6 commits: f4f9821, e164c0e, bf30d15, 511a694, 2ab5b20, 846daa6,
+                   e191598, 0e1cc41
+Task 7  — fraud injection with five distinct patterns
+Task 8  — append-only event log with producer, consumer and offsets
+Task 9  — stream processor with handlers, checkpointing and metrics
+Task 10 — online feature engine, 49 features over 791k events
+Task 11 — automated leakage and integrity tests, editable install
 
+Run `git log --oneline` for the authoritative list.
 ---
 
 ## COMMANDS THAT WORK
@@ -531,19 +660,90 @@ alembic revision --autogenerate -m "description"
 
 ## WHERE I AM RIGHT NOW
 
-**Starting Task 7 — fraud pattern injection.**
+**11 of 32 tasks complete. Phases A, B and C done. Starting TASK 12.**
 
-Five patterns to inject, each with a different signature so the model must learn
-different signals rather than memorising one rule:
+### What exists and works right now
 
-| Pattern | Signature | Should be caught by |
-|---|---|---|
-| Card testing | Burst of tiny transactions in minutes | Velocity features |
-| Account takeover | Behaviour changes abruptly — new device, new categories | Deviation from customer baseline |
-| Geo-impossible | Same card, two cities, impossible speed | `implied_speed_kmh` |
-| Merchant collusion | Complicit merchant inflating amounts | Merchant-level aggregates |
-| Card-not-present | Online, high-value category, no card present | Channel + category + amount |
+| | |
+|---|---|
+| Database | PostgreSQL 17.11, 9 tables, Alembic migrations applied |
+| Data | 791,112 transactions over 90 days, 3,003 fraud (0.380%) across 5 patterns |
+| Event log | 791,112 events, 8 segments, offsets + replay verified |
+| Stream processor | ~6,700 events/s, 0 errors, resumption across processes verified |
+| Features | 49 features, `data/processed/features.parquet`, 140 MB, 0 NaN/inf |
+| Tests | 23 passing — leakage and integrity |
 
-Target fraud rate: **0.004** (~3,100 of 788,000 rows). This brutal imbalance is
-the real challenge — it's why accuracy is a useless metric here and why Task 16's
-cost-based thresholds matter.
+### Task 12 — what comes next
+
+**Temporal train/test split + baseline models.**
+
+**Why the split must be by TIME, never random.** `train_test_split(X, y,
+random_state=42)` is wrong here for two separate reasons:
+1. It shuffles time — March rows land in training while February rows are in
+   test, so the model reads the future to predict the past. Impossible in
+   production.
+2. It splits individual cards across both sides — the model memorises a card's
+   habits, then is "tested" on a transaction surrounded by ones it learned
+   from. That is **group leakage**.
+
+**Correct split:**
+- Days 1–63 → training (~70%)
+- Days 64–76 → validation (~15%, for tuning)
+- Days 77–90 → test (~15%, **touched exactly once**, at Task 15)
+
+**Why a baseline matters.** "PR-AUC 0.72" is meaningless alone. Against a
+baseline of 0.21 it is an achievement; against 0.68 the complexity was not
+worth it. Three baselines to build:
+1. Always predict "not fraud" — scores 99.62% accuracy, catches zero fraud.
+   Exists purely to prove accuracy is a useless metric here.
+2. Hand-written rules (>5 txns in 5 min, OR speed >900 km/h, OR amount >20×
+   card mean) — what banks used before ML. Not a strawman.
+3. Logistic regression — if LightGBM barely beats it, the 49 features have no
+   useful interactions.
+
+**Metrics to use.** PR-AUC (correct for rare events; a random model scores
+0.0038 here, equal to the fraud rate — so context matters enormously when
+reading the number). precision@k (if analysts review 100 cases a day, how many
+of my top 100 are real fraud?). Per-pattern recall. ROC-AUC reported but not
+judged by — it flatters imbalanced data.
+
+**Files to create in Task 12:** `splitter.py`, `baselines.py`, `metrics.py`.
+
+### Remaining roadmap
+
+- **13–18:** LightGBM, imbalance handling, evaluation, **cost-based thresholds**
+  (missing fraud costs ₹5,000, blocking a real customer ₹200 — a 25:1
+  asymmetry, so the threshold is computed, not defaulted to 0.5),
+  unsupervised detection, SHAP + graph features
+- **19–23:** FastAPI scoring service, measured latency, decision engine, case
+  management, JWT auth
+- **24–27:** React dashboard — live stream, case queue, investigation view
+  with SHAP, risk KPIs
+- **28–31:** tests, drift monitoring, retraining loop, load testing
+- **32:** README, diagrams, GitHub, screenshots, report, slides, interview Q&A
+
+### Open items carried forward
+
+- **Account takeover features are weak** (best separation 1.95×). Decision:
+  measure per-pattern recall at Task 15 first, then add targeted features if
+  warranted. Do not add features before measuring.
+- **Collusion shortcut risk:** `merchant_txn_count` is 82 for colluding
+  merchants vs 1,340 normal, so the model may learn "low-volume merchant"
+  instead of "inflated amounts". Check in Task 18 feature importance.
+- **psycopg ResourceWarning** in `test_row_count_matches_database` — harmless
+  now, fix before Phase E.
+
+### Three bugs already found — all of them silent
+
+None raised an exception. All were caught by comparing numbers against what
+they should have been:
+1. **Timezone displacement** — 19:00 peak appeared at 00:30 IST. Caught by
+   plotting the hourly histogram.
+2. **Doubled data** — 1.58M rows instead of 790k. Caught because day 1 showed
+   `+8,246` but `total 799,358`, impossible for a counter starting at zero.
+3. **Fraud in the wrong window** — a 7-day run kept 10 of 238 frauds. Caught by
+   comparing generated against loaded counts.
+
+**The lesson for Phase D:** in data work the dangerous results do not crash —
+they look plausible. If Task 13 reports PR-AUC above 0.95, do not celebrate.
+Check for leakage first.
