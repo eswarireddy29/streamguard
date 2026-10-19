@@ -145,8 +145,8 @@ Kafka risky. **Not decided yet — my call to make.**
 7. ✅ Fraud pattern injection + labelled dataset export
 
 **PHASE C — STREAMING**
-8. ⬜**← CURRENT.**Event log design + producer
-9. ⬜ Consumer with offsets + replay
+8. ✅Event log design + producer
+9. ⬜ **← CURRENT.**Consumer with offsets + replay
 10. ⬜ Online feature engine (rolling windows, velocity, z-scores)
 11. ⬜ Offline feature store + point-in-time correctness + leakage tests
 
@@ -286,6 +286,95 @@ Gaming highest risk 0.452
 - `src/streamguard/generator/fraud_injector.py` — `FraudInjector`, third
   independent RNG stream (`seed + 2_000_029`)
 - `scripts/generate_transactions.py` — rewritten to merge fraud into each day
+### Task 8 — Event log ✅ 19 Oct
+**DECISION: Option A — self-built file-backed log, not Kafka.**
+Reason: Kafka's JVM (~1.5–2 GB) plus WSL2 (~1 GB) against 8 GB total, with
+PostgreSQL + VS Code + Chrome + React dev server all needed simultaneously by
+Phase F. Producer and consumer sit behind abstract base classes so a Kafka
+implementation is a new subclass, not a rewrite.
+
+- `src/streamguard/eventlog/event.py` — frozen `Event` dataclass, JSON Lines
+  serialisation, `schema_version`, `occurred_at` vs `produced_at`
+- `src/streamguard/eventlog/producer.py` — `EventProducer` (ABC) +
+  `FileEventProducer`. Segmented at 100k events, zero-padded filenames,
+  metadata rebuildable from the segments themselves
+- `src/streamguard/eventlog/consumer.py` — `EventConsumer` (ABC) +
+  `FileEventConsumer`. Per-group offset files, `seek()`, `stream()`, `lag()`
+- `src/streamguard/eventlog/txn_source.py` — server-side cursor, strictly
+  ordered by `(occurred_at, id)`
+- `scripts/load_event_log.py`, `scripts/verify_log.py`
+
+**Log state:** 791,112 events, 8 segments, `data/events/transactions/`
+(gitignored — regenerable)
+
+**Key concepts to defend in an interview:**
+- **At-least-once delivery.** Offsets are committed *after* processing, so a
+  crash causes reprocessing, never loss. Consumers must be idempotent.
+  Chosen because duplicate feature computation is harmless; a missed
+  transaction is a missed fraud.
+- **Producer owns offsets.** Callers never supply one — that is what
+  guarantees they are unique and strictly increasing.
+- **Metadata is a cache, not the truth.** Delete `metadata.json` and the
+  producer recovers its position by counting lines in the segments.
+- **Zero-padded segment names.** `000002.jsonl` not `2.jsonl`, or alphabetical
+  sorting gives 0, 1, 10, 11, 2 and the consumer reads segments out of order.
+- **`lag()`** = log end − committed position. The health metric for any
+  streaming consumer; goes on the Task 27 dashboard.
+
+> **LEAKAGE RISK, DELIBERATE AND DOCUMENTED:** the event payload carries
+> `is_fraud` and `fraud_type`. A production stream would not — that is what
+> you are predicting. They are included because training needs ground truth
+> and a parallel label store is more complexity than it is worth here.
+> **HARD RULE: the feature engine and scoring path must never read them.**
+> To be enforced by a test in Task 11.
+>
+> `merchants.risk_score` is deliberately **excluded** from the payload — it is
+> generator ground truth, and the model must learn category risk from the MCC.
+
+> **Environment incident (19 Oct):** `ModuleNotFoundError: No module named
+> 'pydantic_core._pydantic_core'`. Cause: venv site-packages built for 3.11
+> being run by a 3.10 interpreter — compiled extensions are version-specific.
+> Fixed by rebuilding the venv with `py -3.11` and reinstalling.
+> Nothing was lost: code, database and Git history were untouched, which is
+> exactly why `requirements.txt` exists and `.venv/` is gitignored.
+### Task 9 — Stream processor ✅ 19 Oct
+- `src/streamguard/eventlog/handlers.py` — `EventHandler` ABC with
+  `handle()`, `on_start()`, `on_stop()`; `_handle_timed()` catches, counts and
+  times. Built-ins: `CountingHandler`, `OrderCheckHandler`, `SamplingHandler`
+- `src/streamguard/eventlog/metrics.py` — `ProcessorMetrics`: lag, overall vs
+  recent rate, error rate, ETA
+- `src/streamguard/eventlog/processor.py` — `StreamProcessor` with
+  `ProcessorConfig`, chained `register()`, signal handling
+- `scripts/run_processor.py`, `scripts/test_handlers.py`
+
+**Full run:** 791,112 processed, 0 failed, 0 order violations, 80.2s,
+~9,900/s overall, final lag 0.
+
+**Resumption verified:** run 1 (offsets 0–99,999, 100,000 events) then run 2
+(offsets 100,000–791,111, 691,112 events). 100,000 + 691,112 = 791,112 exactly
+— no gap, no overlap, across separate processes.
+
+**Design decisions to defend:**
+- **Handlers are a chain, not one function** — testable alone, isolated from
+  each other's failures, composable. Task 10 and Task 19 plug in without
+  touching the processor.
+- **Error policy:** log + count + continue, stop only if the error *rate*
+  exceeds 1% after a 1,000-event grace period. One bad event is noise; a
+  thousand is a symptom. A grace period is needed or 1 failure in the first
+  2 events reads as a 50% error rate.
+- **Checkpoint on count OR time, whichever first.** Count bounds reprocessing
+  after a crash; the time bound stops a slow stream sitting un-committed.
+- **`finally` guarantees commit + `on_stop()`.** Most important block in the
+  file — a handler that buffers writes loses its final partial batch without it.
+- **Signal handling:** first Ctrl+C finishes the batch and commits; second
+  force-quits.
+
+**Known performance characteristic (not a bug):** throughput sawtooths
+~24,000/s → ~6,000/s in a regular cycle. Cause: `poll()` seeks by skipping
+lines, so reaching offset 150,042 means opening segment 1 and skipping 50,042
+lines. Early offsets in a segment are fast, late ones slow. Kafka avoids this
+with a byte-offset index. Acceptable here — the consumer is sequential, and
+~9,900/s drains the whole log in 80s.
 
 **DB state:** 791,112 transactions / 3,003 fraud / **0.380%**
 
