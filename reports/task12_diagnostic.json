@@ -1,0 +1,354 @@
+{
+  "created_at": "2026-10-19T14:55:45",
+  "val_prevalence": 0.0037405512117827363,
+  "single_feature_ap": [
+    {
+      "feature": "distance_from_home_km",
+      "ap_alone": 0.5476140396731555,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "distance_from_prev_km",
+      "ap_alone": 0.48633338647341967,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "implied_speed_kmh",
+      "ap_alone": 0.4861746942628176,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "distinct_merchants_1h",
+      "ap_alone": 0.40277091967212736,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "txn_count_1h",
+      "ap_alone": 0.40191237559482734,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "distinct_mccs_1h",
+      "ap_alone": 0.38059295537819143,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "txn_count_5m",
+      "ap_alone": 0.3516841144201361,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_new_city",
+      "ap_alone": 0.21885351669752257,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "merchant_amount_zscore",
+      "ap_alone": 0.13973986915050307,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "txn_count_24h",
+      "ap_alone": 0.13345546566008165,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "distinct_cities_24h",
+      "ap_alone": 0.12852742092794806,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_manual_entry",
+      "ap_alone": 0.11904835778449308,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "amount",
+      "ap_alone": 0.11895026394448906,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "amount_log",
+      "ap_alone": 0.11895026394448904,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "seconds_since_prev",
+      "ap_alone": 0.10317218337956036,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "amount_vs_merchant_mean",
+      "ap_alone": 0.08444412134058571,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "amount_ratio_card_mean",
+      "ap_alone": 0.08418547750071351,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "amount_ratio_card_max",
+      "ap_alone": 0.07657407667908911,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "velocity_ratio_5m_24h",
+      "ap_alone": 0.06149763075604963,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_new_device",
+      "ap_alone": 0.04480097762638463,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_foreign_country",
+      "ap_alone": 0.04063904931505004,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_speed_implausible",
+      "ap_alone": 0.040260359279453005,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "merchant_distinct_cards",
+      "ap_alone": 0.03857426967874526,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "merchant_txn_count",
+      "ap_alone": 0.0381657038095468,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "txn_count_1m",
+      "ap_alone": 0.02967566401341316,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_new_country",
+      "ap_alone": 0.024495956394870594,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "amount_ratio_card_ema",
+      "ap_alone": 0.021873744079270948,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "merchant_is_online",
+      "ap_alone": 0.015033021151396524,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "merchant_amount_mean",
+      "ap_alone": 0.01054073242369459,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "amount_sum_1h",
+      "ap_alone": 0.0101813395382573,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "hour_of_day",
+      "ap_alone": 0.00817887432441037,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "amount_sum_24h",
+      "ap_alone": 0.0075096902612298705,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "merchant_amount_std",
+      "ap_alone": 0.006880761799541271,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "is_new_merchant",
+      "ap_alone": 0.0059668130546036875,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_night",
+      "ap_alone": 0.005570403641596024,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "amount_zscore_customer",
+      "ap_alone": 0.004947697447601394,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "amount_zscore_card",
+      "ap_alone": 0.004905839393032087,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_new_mcc",
+      "ap_alone": 0.004904531893647928,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_ecommerce",
+      "ap_alone": 0.00475906002666519,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "is_card_present",
+      "ap_alone": 0.00475906002666519,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "merchant_novelty_rate",
+      "ap_alone": 0.004755590057373066,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "card_txn_count",
+      "ap_alone": 0.0044573292075213615,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "card_distinct_merchants",
+      "ap_alone": 0.004358020901953591,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "card_distinct_mccs",
+      "ap_alone": 0.004018658194847031,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "card_age_days",
+      "ap_alone": 0.00397868024203172,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "is_weekend",
+      "ap_alone": 0.003968819131029213,
+      "direction": "low=fraud"
+    },
+    {
+      "feature": "distinct_countries_24h",
+      "ap_alone": 0.003823336036255857,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "day_of_week",
+      "ap_alone": 0.003741240904857292,
+      "direction": "high=fraud"
+    },
+    {
+      "feature": "is_first_transaction",
+      "ap_alone": 0.0037405512117827363,
+      "direction": "high=fraud"
+    }
+  ],
+  "perfect_separators": [],
+  "ablation": [
+    {
+      "step": 0,
+      "n_features": 49,
+      "dropped_so_far": [],
+      "pr_auc": 0.9299450736298821
+    },
+    {
+      "step": 1,
+      "n_features": 46,
+      "dropped_so_far": [
+        "distance_from_home_km",
+        "distance_from_prev_km",
+        "implied_speed_kmh"
+      ],
+      "pr_auc": 0.8893961743226495
+    },
+    {
+      "step": 2,
+      "n_features": 43,
+      "dropped_so_far": [
+        "distance_from_home_km",
+        "distance_from_prev_km",
+        "implied_speed_kmh",
+        "distinct_merchants_1h",
+        "txn_count_1h",
+        "distinct_mccs_1h"
+      ],
+      "pr_auc": 0.8798242905004967
+    },
+    {
+      "step": 3,
+      "n_features": 40,
+      "dropped_so_far": [
+        "distance_from_home_km",
+        "distance_from_prev_km",
+        "implied_speed_kmh",
+        "distinct_merchants_1h",
+        "txn_count_1h",
+        "distinct_mccs_1h",
+        "txn_count_5m",
+        "is_new_city",
+        "merchant_amount_zscore"
+      ],
+      "pr_auc": 0.8022370846318081
+    },
+    {
+      "step": 4,
+      "n_features": 37,
+      "dropped_so_far": [
+        "distance_from_home_km",
+        "distance_from_prev_km",
+        "implied_speed_kmh",
+        "distinct_merchants_1h",
+        "txn_count_1h",
+        "distinct_mccs_1h",
+        "txn_count_5m",
+        "is_new_city",
+        "merchant_amount_zscore",
+        "txn_count_24h",
+        "distinct_cities_24h",
+        "is_manual_entry"
+      ],
+      "pr_auc": 0.7585093582737282
+    }
+  ],
+  "full_model": {
+    "model": "logistic_regression",
+    "block": "val",
+    "n": 115491,
+    "n_fraud": 432,
+    "prevalence": 0.0037405512117827363,
+    "pr_auc": 0.9299450736298821,
+    "pr_auc_random": 0.0037405512117827363,
+    "lift_over_random": 248.6117743022887,
+    "roc_auc": 0.9980754237841907,
+    "k": 1300,
+    "alerts_per_day": 100,
+    "precision_at_k": 0.3230769230769231,
+    "recall_at_k": 0.9722222222222222,
+    "fraud_caught_at_k": 420,
+    "accuracy_always_negative": 0.9962594487882173,
+    "per_pattern_recall_at_k": {
+      "account_takeover": 0.9767441860465116,
+      "card_not_present": 1.0,
+      "card_testing": 1.0,
+      "geo_impossible": 0.8,
+      "merchant_collusion": 0.8863636363636364
+    },
+    "per_pattern_n": {
+      "account_takeover": 86,
+      "card_not_present": 50,
+      "card_testing": 227,
+      "geo_impossible": 25,
+      "merchant_collusion": 44
+    },
+    "binary_precision": null,
+    "binary_recall": null,
+    "binary_f1": null,
+    "binary_flagged": null,
+    "notes": []
+  }
+}
