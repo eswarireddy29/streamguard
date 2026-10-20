@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
-**Last updated:** 19 Oct 2026
-Tasks 12–14 complete. Starting Task 15.
+**Last updated:** 20 Oct 2026
+**Status:** Phases A, B, C complete. Tasks 12–17 complete. Starting Task 18.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -157,10 +157,10 @@ not reopen it.**
 12. ✅Train/test split by **time** (never random) + baseline model
 13. ✅LightGBM training pipeline
 14. ✅Class imbalance handling + hyperparameter tuning
-15. ⬜ Evaluation: PR-AUC, precision@k, calibration curve
-16. ⬜ Cost-based threshold optimisation
-17. ⬜ Unsupervised anomaly detector for unseen fraud types
-18. ⬜ Graph features (NetworkX) + SHAP + MLflow tracking
+15. ✅ Evaluation: PR-AUC, precision@k, calibration curve
+16. ✅Cost-based threshold optimisation
+17. ✅Unsupervised anomaly detector for unseen fraud types
+18. ⬜**current**Graph features (NetworkX) + SHAP + MLflow tracking
 
 **PHASE E — SERVING**
 19. ⬜ FastAPI scoring service + request validation
@@ -509,89 +509,8 @@ half the argument for ML.**
 
 **precision@k ceiling:** only 507 frauds exist in the block, so
 precision@1300 cannot exceed 507/1300 = 0.3900.
-### Task 12 — what comes next
-**Verified numbers (19 Oct)**
 
-| block | days | rows | fraud | prevalence |
-|---|---|---|---|---|
-| train | 0–62  | 552,521 | 2,129 | 0.385% |
-| val   | 63–75 | 115,491 |   432 | 0.374% |
-| test  | 76–89 | 123,100 |   442 | 0.359% |
-| total |       | 791,112 | 3,003 |        |
 
-57 columns = 49 features + 8 metadata. Rows and fraud sum exactly.
-
-**Baselines on VALIDATION** (k = 1,300 = 100 analyst reviews × 13 days;
-random PR-AUC = 0.0037):
-
-| model | PR-AUC | lift | ROC-AUC | prec@k | recall@k |
-|---|---|---|---|---|---|
-| always_negative | 0.0037 | 1.0× | 0.5000 | n/a | n/a |
-| rules | 0.0146 | 3.9× | 0.5565 | 0.0408 | 0.1227 |
-| logistic_regression | 0.9299 | 248.6× | 0.9981 | 0.3231 | 0.9722 |
-
-`always_negative`'s prec@k and recall@k are **degenerate** — every score is
-identical, so argsort returns rows in chronological order, which happened
-to contain 3 frauds (chance would give ~4.8). Quote them as n/a. Its
-PR-AUC equals prevalence and ROC-AUC is exactly 0.5000, the textbook
-values for a model with no information.
-
-`rules` caught ~53 of 432 frauds. Expected: `txn_count_5m` averages 1.841
-for card_testing, so a `>5` threshold fires only on the tail of those
-bursts; the speed rule can reach at most geo_impossible (25 in this
-block); and no rule targets account_takeover at all. **One fraud in eight
-is what pre-ML rule systems achieve here — half the argument for ML.**
-
-**Why precision@1300 cannot exceed 0.332:** only 432 frauds exist in the
-block. The logistic model's 0.3231 is 97% of that ceiling.
-
----
-
-#### Task 12.5b — leakage diagnostic (`scripts/diagnose_baseline.py`)
-
-A linear model scoring 0.93 on fraud detection demanded investigation
-before being written down. Three checks:
-
-**1. Perfect separators: NONE.** No feature's fraud and normal value
-ranges fail to overlap. A leaked label would almost certainly show here.
-
-**2. Ablation decays gracefully, it does not collapse.** Leakage looks
-like a cliff — remove the leaked column, score falls to near-random.
-
-| features | PR-AUC | last dropped |
-|---|---|---|
-| 49 | 0.9299 | — |
-| 46 | 0.8894 | distance_from_home_km, distance_from_prev_km, implied_speed_kmh |
-| 43 | 0.8798 | distinct_merchants_1h, txn_count_1h, distinct_mccs_1h |
-| 40 | 0.8022 | txn_count_5m, is_new_city, merchant_amount_zscore |
-| 37 | 0.7585 | txn_count_24h, distinct_cities_24h, is_manual_entry |
-
-With the twelve strongest features gone it still scores 0.7585 = **205×
-random**. The signal is distributed, not carried by a giveaway.
-
-**3. Strongest single features (validation, no model fitted):**
-
-| feature | PR-AUC alone | direction |
-|---|---|---|
-| distance_from_home_km | 0.5476 | low=fraud |
-| distance_from_prev_km | 0.4863 | low=fraud |
-| implied_speed_kmh | 0.4862 | low=fraud |
-| distinct_merchants_1h | 0.4028 | high=fraud |
-| txn_count_1h | 0.4019 | high=fraud |
-| distinct_mccs_1h | 0.3806 | high=fraud |
-| txn_count_5m | 0.3517 | high=fraud |
-
-Seven features each at 95–150× random. A linear combination reaching
-0.93 is unremarkable. **Conclusion: not leakage.** The generator produces
-fraud that is genuinely separable with the features built for it — which
-it should, since the features were designed knowing the patterns. That is
-the honest statement, and it belongs in the README.
-
-**A hypothesis that was tested and killed:** `is_manual_entry` was
-predicted to be a perfect separator, since Task 10 recorded 1.000 fraud
-vs 0.000 normal. It ranks 12th at 0.1190. Task 10's figure was *within
-the card_not_present pattern*, which is 50 of 432 frauds. A feature that
-perfectly flags 11% of fraud is a weak overall ranker.
 
 ---
 
@@ -989,6 +908,199 @@ stated explicitly so the threshold can be re-run with other numbers.
 
 **The theoretical answer.** Block when the expected cost of approving
 exceeds the expected cost of blocking:
+exceeds the expected cost of blocking:
+
+    p × FN > (1 − p) × FP   →   p > FP / (FP + FN) = 200/5200 = 0.03846
+
+**The measured optimum is 0.03061** — close to theory, which is itself
+a check: the theoretical value depends only on the cost ratio, nothing
+about the data. They agree **because the probabilities are calibrated**
+(Task 15, ECE 0.00053). Uncalibrated scores would have diverged.
+
+**On VALIDATION:**
+
+| threshold | caught | missed | blocked | precision | recall | cost |
+|---|---|---|---|---|---|---|
+| 0.50000 (default) | 392 | 115 | 0 | 1.0000 | 0.7732 | ₹575,000 |
+| 0.03846 (theory) | 478 | 29 | 202 | 0.7029 | 0.9428 | ₹185,400 |
+| **0.03061 (optimum)** | **482** | **25** | **264** | 0.6461 | **0.9507** | **₹177,800** |
+
+**₹397,200 saved vs the default — 69.1% of the cost at 0.5.**
+
+**The cost curve is genuinely U-shaped**, and both ends are ~12× worse
+than the optimum:
+
+| threshold | caught | missed | blocked | cost |
+|---|---|---|---|---|
+| 0.00030 | 503 | 4 | 11,054 | ₹2,230,800 |
+| 0.00640 | 495 | 12 | 1,422 | ₹344,400 |
+| **0.03061** | **482** | **25** | **264** | **₹177,800** |
+| 0.08980 | 460 | 47 | 59 | ₹246,800 |
+| 0.98835 | 117 | 390 | 0 | ₹1,950,000 |
+
+**Precision DROPS from 1.0000 to 0.6461 and that is correct.** Those
+264 false alarms cost ₹52,800; the 90 extra frauds they catch would
+have cost ₹450,000. Optimising precision here would lose money.
+
+#### Three-way decision: approve / review / block
+
+A binary decision throws away the model's uncertainty. Middle scores
+are exactly the cases worth analyst time: too risky to approve
+silently, not certain enough to block a paying customer.
+
+| band | threshold | rows | fraud | legit |
+|---|---|---|---|---|
+| block | ≥ 0.03061 | 746 | 482 | 264 |
+| review | ≥ 0.01113 | 554 | 9 | — |
+| approve | < 0.01113 | 114,266 | 16 missed | — |
+
+**₹160,500 — ₹17,300 cheaper than the binary optimum.** The review band
+catches 9 frauds the binary threshold would have approved, for ₹27,700
+of analyst time. It also respects capacity: **43 reviews/day against
+100 analyst capacity**, so the queue is workable.
+
+**Caveat:** `three_way()` assumes an analyst always judges correctly.
+Real analysts do not, so ₹160,500 is a floor, not a forecast.
+
+#### APPLIED TO TEST (threshold chosen on validation, only reported here)
+
+| threshold | caught | missed | blocked | precision | recall | cost |
+|---|---|---|---|---|---|---|
+| 0.50000 | 357 | 102 | 0 | 1.0000 | 0.7778 | ₹510,000 |
+| **0.03061** | **436** | **23** | **253** | 0.6328 | **0.9499** | **₹165,600** |
+
+**₹344,400 saved across 123,117 transactions.** Recall 0.7778 → 0.9499.
+
+The threshold was chosen on validation and **not re-optimised on test**.
+`test_set_access.log` now has two lines, both with written reasons:
+Task 15's final evaluation and this reporting access.
+
+**Interview talking point**
+
+*"The default threshold of 0.5 assumes a false positive and a false
+negative cost the same. In fraud they differ by 25:1, so I computed the
+threshold from the cost model instead. Theory says 200/5200 = 0.0385;
+the measured optimum on validation was 0.0306, and those agreeing is
+itself evidence the probabilities are calibrated, because the
+theoretical value depends only on the cost ratio. On the held-out test
+set that threshold saved ₹344,400 across 123,000 transactions and
+raised recall from 0.78 to 0.95. Precision fell to 0.63 — which is
+correct, because the extra false alarms cost ₹52,800 while the frauds
+they caught would have cost ₹450,000."*
+
+*"I also built a three-way decision, because a binary cut throws away
+the model's uncertainty. Routing the middle band to an analyst was
+₹17,300 cheaper again and generated 43 reviews a day against a capacity
+of 100 — though that figure assumes analysts are always right, so I
+treat it as a floor."*
+
+### Task 17 — Unsupervised anomaly detection ✅ 20 Oct
+
+**Files:** `src/streamguard/ml/anomaly.py`, `scripts/run_anomaly.py`,
+`scripts/test_novel_fraud.py`
+
+**The problem.** LightGBM learned five patterns from labels. A sixth
+pattern invented next month would score low and be approved — a
+supervised model can only catch what it was shown. An unsupervised
+detector learns what NORMAL looks like and flags distance from it, so
+a new attack is just as anomalous as an old one.
+
+**Two detectors, both fitted on NORMAL TRAINING ROWS ONLY.** Labels
+select which rows to train on; they are never a feature. Including
+fraud would teach the detector that fraud is normal.
+
+- **Isolation Forest** — random splits isolate outliers faster than
+  points in a dense cluster. No distance metric, no distribution
+  assumption. Quantile-transformed first, because amounts are lognormal
+  and a few huge values would dominate every split.
+- **Mahalanobis** — distance from the centre of normal traffic,
+  accounting for correlation. Two correlated features moving together
+  is ordinary; one moving without the other is anomalous. Ridge term
+  (1e-6) added because some features are collinear and the covariance
+  matrix would otherwise be singular.
+
+#### 17.2 — On KNOWN fraud (the unfair test)
+
+| model | PR-AUC | lift | prec@k | recall@k |
+|---|---|---|---|---|
+| isolation_forest | 0.3842 | 87.6× | 0.2038 | 0.5227 |
+| mahalanobis | 0.5295 | 120.7× | 0.2346 | 0.6016 |
+| lightgbm | 0.9525 | 217.1× | 0.3777 | 0.9684 |
+
+LightGBM wins easily — it trained on exactly these patterns. **But both
+detectors are 88–121× random having never seen a label**, so they
+learned something real about normal behaviour.
+
+**Per-pattern, the useful split:**
+
+| pattern | isolation | mahalanobis | lightgbm |
+|---|---|---|---|
+| card_not_present | 3.8% | **100.0%** | 100.0% |
+| card_testing | 93.7% | 85.8% | 99.2% |
+| geo_impossible | 76.5% | 70.6% | 100.0% |
+| merchant_collusion | 20.7% | 27.6% | 96.6% |
+| account_takeover | 3.9% | 9.7% | 91.6% |
+
+Patterns that are **statistically weird in isolation** get caught
+unsupervised. Patterns that are **contextually** fraudulent but
+individually ordinary do not: an account-takeover transaction looks
+like a normal purchase, and only its relationship to that customer's
+history makes it fraud.
+
+#### 17.3 — THE REAL EXPERIMENT: holdout by pattern
+
+For each pattern, LightGBM was **retrained with that pattern's rows
+removed from training**, then measured on it in validation. From the
+supervised model's point of view, that pattern is an attack invented
+after deployment. The detectors are unchanged — they never used labels,
+so there is nothing to remove.
+
+**Recall on the held-out pattern, top 1,300:**
+
+| pattern | n | lightgbm | isolation | mahalanobis |
+|---|---|---|---|---|
+| card_not_present | 52 | **0.0%** | 3.8% | **100.0%** |
+| card_testing | 254 | **0.0%** | **93.7%** | 85.8% |
+| account_takeover | 155 | **33.5%** | 3.9% | 9.7% |
+| merchant_collusion | 29 | **41.4%** | 20.7% | 27.6% |
+| geo_impossible | 17 | 76.5% | 76.5% | 70.6% |
+
+**LightGBM catches ZERO of 254 card-testing frauds and ZERO of 52 CNP
+frauds when those patterns are absent from training.** Not "worse" —
+zero. An unsupervised detector that never saw a label catches 93.7% and
+100% of them.
+
+**This is the measured case for running both in production**, not an
+assertion. The two approaches fail on different things:
+
+- supervised fails on patterns it has not seen
+- unsupervised fails on patterns that are contextually, not
+  statistically, abnormal
+
+**Also measured:** the crippled model's overall PR-AUC drops to 0.4574
+when card testing is removed — that pattern is 52% of all fraud, so
+losing it halves performance. Removing geo_impossible costs almost
+nothing (0.9422), because it is 17 validation rows.
+
+**Caveat on the 100%.** Mahalanobis scores exactly 100% on CNP because
+`is_manual_entry` is 1.0 for every CNP row and ~0 for normal traffic —
+a documented generator property (Task 13.7A kept it as legitimate: it
+IS the definition of card-not-present). Real CNP fraud would not
+separate that cleanly.
+
+**Interview talking point**
+
+*"A supervised fraud model can only catch what it was trained on, so I
+tested that instead of assuming it. For each of my five patterns I
+retrained LightGBM with that pattern deleted from training, then
+measured recall on it. On card testing and card-not-present it caught
+exactly zero — 0 of 254 and 0 of 52. An unsupervised detector fitted
+only on normal traffic, with no labels at all, caught 93.7% and 100% of
+the same rows. That is the measured argument for running both: they
+fail on different things. The supervised model wins on patterns that
+are contextually fraudulent but individually ordinary, like account
+takeover, where you need to know the customer's history to see anything
+wrong."*
 
 
 #### The editable install — a structural fix
@@ -1205,23 +1317,18 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-**15 of 32 tasks complete.**
+**17 of 32 tasks complete.**
 
 ### What exists and works right now
 
 | | |
 |---|---|
 | Database | PostgreSQL 17.11, 9 tables, Alembic migrations applied |
-| Data | 791,112 transactions over 90 days, 3,003 fraud (0.380%) across 5 patterns |
-| Event log | 791,112 events, 8 segments, offsets + replay verified |
-| Stream processor | ~6,700 events/s, 0 errors, resumption across processes verified |
-| Features | 49 features, `data/processed/features.parquet`, 140 MB, 0 NaN/inf |
-|44 passing — leakage, integrity, split, generator; add rows: Data | 791,109 transactions, 3,000 fraud (0.379%) and Model | LightGBM, val PR-AUC 0.9201 (random 0.0044)
-| Model | LightGBM tuned, **test PR-AUC 0.9573**, val 0.9525, calibrated (ECE 0.0005) 
-| Decision | Threshold 0.03061 (cost-optimised, 25:1). Test: recall 0.9499, ₹344,400 saved vs 0.5 ||
-
-
-
+| Data | 791,109 transactions over 90 days, 3,000 fraud (0.379%) across 5 patterns |
+| Model | LightGBM tuned, **test PR-AUC 0.9573**, val 0.9525, calibrated (ECE 0.0005) |
+| Decision | Threshold 0.03061 (cost-optimised, 25:1). Test: recall 0.9499, ₹344,400 saved vs 0.5 |
+| Anomaly | Isolation Forest + Mahalanobis, fitted on normal only. Catch 93.7% / 100% of patterns LightGBM scores 0.0% on |
+| Tests | 44 passing — leakage, integrity, split, generator |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
@@ -1328,7 +1435,7 @@ judged by — it flatters imbalanced data.
 
 ### Remaining roadmap
 
-- **13–18:** LightGBM, imbalance handling, evaluation, **cost-based thresholds**
+- **18:** graph features (NetworkX), SHAP explanations, MLflow tracking
   (missing fraud costs ₹5,000, blocking a real customer ₹200 — a 25:1
   asymmetry, so the threshold is computed, not defaulted to 0.5),
   unsupervised detection, SHAP + graph features
@@ -1340,20 +1447,28 @@ judged by — it flatters imbalanced data.
 - **32:** README, diagrams, GitHub, screenshots, report, slides, interview Q&A
 
 ### Open items carried forward
-- - ~~Probabilities calibrated?~~ **CONFIRMED at Task 15** — ECE 0.00053
+- ~~Account takeover weak~~ **CLOSED at Task 13** — 83.9% recall with
+  trees vs 52.3% linear. Test: 94.2%.
+- ~~Collusion shortcut (`merchant_txn_count`)~~ **LOW RISK** — rank 28,
+  0.21% of gain at Task 14. Confirm with SHAP at Task 18.
+- ~~Overfitting gap 0.0799~~ **CLOSED at Task 14** — 0.0297 after
+  removing `is_unbalance` and tuning.
+- ~~Probabilities calibrated?~~ **CONFIRMED at Task 15** — ECE 0.00053
   on test. Task 16 uses them directly.
-- **Test set is used.** One access, logged. Do not tune against it.
-- **Overfitting gap 0.0799** — train hits PR-AUC 1.0 by iteration 400.
-  Task 14: lower `num_leaves`, raise `min_child_samples`.
 - **Test set accessed twice**, both logged with reasons (Task 15
   evaluation, Task 16 threshold reporting). No tuning against it.
+- **Run both models in production** (Phase E decision): LightGBM scores
+  0.0% on unseen patterns; the detectors cover that gap. Needs a
+  combination rule — max score, or route anomaly-only hits to review.
 - **merchant_collusion distance** mean 258 km vs median 20.5 km — the
   25-try rejection loop occasionally fails for isolated merchants.
   Median is fine; not worth a regeneration.
 - **psycopg ResourceWarning** — still open, fix before Phase E.
-- **README must state** that 0.9201 describes the generator, not the
-  real world, and that three label proxies were found and fixed.
-
+- **README must state** that 0.9573 describes the generator, not the
+  real world, and that three label proxies were found and fixed at
+  Task 13.7.
+- **No latency measurement yet** — Task 20. The record calls a measured
+  latency budget a defining feature of this project.
 
 ### Three bugs already found — all of them silent
 
