@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–E complete. Task 24 complete. Starting Task 25.
+**Status:** → Phases A–E complete. Task 25 complete. Starting Task 26.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -171,8 +171,8 @@ not reopen it.**
 
 **PHASE F — FRONTEND**
 24. ✅React + Vite setup, API client
-25. ⬜  **← CURRENT.**Live transaction stream page
-26. ⬜ Analyst case queue + investigation view with SHAP
+25. ✅Live transaction stream page
+26. ⬜ **← CURRENT.**Analyst case queue + investigation view with SHAP
 27. ⬜ Risk KPI dashboard + model monitoring page
 
 **PHASE G — QUALITY**
@@ -1812,6 +1812,17 @@ server's permission map to hide controls a role cannot use — but that
 is cosmetic, not security. The server returns 403 and anyone can edit
 JavaScript in their own browser; the mirror just avoids showing a
 button that would fail."*
+
+
+**Interview talking point**
+
+*"The live stream page needed something to be live, so I wrote a
+replay feeder that pushes the event log through the real HTTP scoring
+endpoint, authenticating as the service role a payment switch would
+use. The page polls rather than using websockets — a dropped poll is
+self-healing, a dropped socket needs reconnection code — and it asks
+only for decisions newer than the highest id it holds, so the payload
+does not grow with the table."*
 
 #### The editable install — a structural fix
 
