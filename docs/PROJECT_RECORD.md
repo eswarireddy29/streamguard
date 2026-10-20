@@ -173,10 +173,10 @@ not reopen it.**
 24. ✅React + Vite setup, API client
 25. ✅Live transaction stream page
 26. ✅Analyst case queue + investigation view with SHAP
-27. ⬜**← CURRENT.**Risk KPI dashboard + model monitoring page
+27. ✅Risk KPI dashboard + model monitoring page
 
 **PHASE G — QUALITY**
-28. ⬜ Unit + integration tests (pytest)
+28. ⬜ **← CURRENT.**Unit + integration tests (pytest)
 29. ⬜ API tests + error handling hardening
 30. ⬜ Drift monitoring (Evidently) + retraining from analyst labels
 31. ⬜ Load testing + structured logging + observability

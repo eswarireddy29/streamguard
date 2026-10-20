@@ -204,3 +204,11 @@ export function recentDecisions({ limit = 50, sinceId = 0 } = {}) {
   })
   return request(`/recent-decisions?${params}`)
 }
+
+export function riskKpis({ fnCost, fpCost } = {}) {
+  const params = new URLSearchParams()
+  if (fnCost) params.set('fn_cost', String(fnCost))
+  if (fpCost) params.set('fp_cost', String(fpCost))
+  const q = params.toString()
+  return request(`/risk-kpis${q ? `?${q}` : ''}`)
+}

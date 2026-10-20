@@ -425,3 +425,121 @@ class CaseRepository:
                        for r in totals},
             "max_id": max((r[0] for r in rows), default=since_id),
         }
+
+    def risk_kpis(self, fn_cost: float = 5000.0,
+                  fp_cost: float = 200.0) -> dict:
+        """What a risk manager needs: money, mix, and label supply.
+
+        The cost figures are the Task 16 assumptions. They are passed
+        in rather than hardcoded so the page can be re-run with the
+        bank's real chargeback and churn numbers.
+
+        MONEY IS ESTIMATED, NOT MEASURED. Only closed cases have a
+        verdict, so "fraud prevented" counts blocked transactions an
+        analyst CONFIRMED. Blocked-and-unreviewed is not counted as a
+        win - claiming it would be marking our own homework.
+        """
+        with get_session() as s:
+            mix = s.execute(text("""
+                SELECT action, COUNT(*), AVG(score), SUM(t.amount)
+                FROM decisions d
+                JOIN transactions t ON t.id = d.transaction_id
+                GROUP BY action
+            """)).fetchall()
+
+            # Decisions per hour, for the trend chart.
+            hourly = s.execute(text("""
+                SELECT date_trunc('hour', decided_at) AS h,
+                       action, COUNT(*)
+                FROM decisions
+                GROUP BY h, action
+                ORDER BY h
+            """)).fetchall()
+
+            # Score distribution in 10 buckets. Quantile bucketing
+            # would hide the shape: at this prevalence almost
+            # everything sits near zero, and that IS the finding.
+            buckets = s.execute(text("""
+                SELECT width_bucket(score, 0, 1, 10) AS b,
+                       COUNT(*), MIN(score), MAX(score)
+                FROM decisions
+                GROUP BY b ORDER BY b
+            """)).fetchall()
+
+            verdicts = s.execute(text("""
+                SELECT c.verdict, COUNT(*), SUM(t.amount)
+                FROM cases c
+                JOIN transactions t ON t.id = c.transaction_id
+                GROUP BY c.verdict
+            """)).fetchall()
+
+            # Confirmed outcomes only - the basis for the money figures.
+            confirmed = s.execute(text("""
+                SELECT d.action, c.verdict, COUNT(*), SUM(t.amount)
+                FROM cases c
+                JOIN decisions d ON d.id = c.decision_id
+                JOIN transactions t ON t.id = c.transaction_id
+                WHERE c.verdict IN ('confirmed_fraud', 'legitimate')
+                GROUP BY d.action, c.verdict
+            """)).fetchall()
+
+            latency = s.execute(text("""
+                SELECT AVG(latency_ms),
+                       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms),
+                       PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms),
+                       PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms),
+                       MAX(latency_ms), COUNT(*)
+                FROM decisions
+            """)).fetchone()
+
+            queue = s.execute(text("""
+                SELECT status, COUNT(*) FROM cases GROUP BY status
+            """)).fetchall()
+
+            models = s.execute(text("""
+                SELECT model_version, COUNT(*), MIN(decided_at), MAX(decided_at)
+                FROM decisions GROUP BY model_version
+            """)).fetchall()
+
+        # --- money, from CONFIRMED verdicts only ---
+        prevented = sum(float(r[3] or 0) for r in confirmed
+                        if r[1] == "confirmed_fraud")
+        prevented_n = sum(r[2] for r in confirmed
+                          if r[1] == "confirmed_fraud")
+        false_alarms = sum(r[2] for r in confirmed if r[1] == "legitimate")
+        fa_cost = false_alarms * fp_cost
+
+        return {
+            "mix": [{"action": r[0], "n": r[1], "mean_score": float(r[2] or 0),
+                     "total_amount": float(r[3] or 0)} for r in mix],
+            "hourly": [{"hour": r[0].isoformat(), "action": r[1], "n": r[2]}
+                       for r in hourly],
+            "score_buckets": [{"bucket": r[0], "n": r[1],
+                               "lo": float(r[2] or 0), "hi": float(r[3] or 0)}
+                              for r in buckets],
+            "verdicts": [{"verdict": r[0], "n": r[1],
+                          "amount": float(r[2] or 0)} for r in verdicts],
+            "queue": {r[0]: r[1] for r in queue},
+            "money": {
+                "fraud_prevented_amount": prevented,
+                "fraud_prevented_n": prevented_n,
+                "false_alarms_n": false_alarms,
+                "false_alarm_cost": fa_cost,
+                "net": prevented - fa_cost,
+                "fn_cost_assumption": fn_cost,
+                "fp_cost_assumption": fp_cost,
+                "basis": "confirmed analyst verdicts only",
+            },
+            "latency": {
+                "mean_ms": float(latency[0] or 0),
+                "p50_ms": float(latency[1] or 0),
+                "p95_ms": float(latency[2] or 0),
+                "p99_ms": float(latency[3] or 0),
+                "max_ms": float(latency[4] or 0),
+                "n": latency[5],
+            },
+            "models": [{"version": r[0], "n": r[1],
+                        "first": r[2].isoformat() if r[2] else None,
+                        "last": r[3].isoformat() if r[3] else None}
+                       for r in models],
+        }

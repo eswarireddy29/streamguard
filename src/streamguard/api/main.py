@@ -302,6 +302,13 @@ def recent_decisions(limit: int = 50, since_id: int = 0,
     return _cases.recent_decisions(limit=limit, since_id=since_id)
 
 
+@app.get("/risk-kpis")
+def risk_kpis(fn_cost: float = 5000.0, fp_cost: float = 200.0,
+              user: TokenData = Depends(require("read_stats"))) -> dict:
+    """Risk manager view. Requires read_stats - analysts get 403."""
+    return _cases.risk_kpis(fn_cost=fn_cost, fp_cost=fp_cost)
+
+
 @app.get("/auth/me")
 def whoami(user: TokenData = Depends(current_user)) -> dict:
     """Who does the server think you are, and what may you do?"""
