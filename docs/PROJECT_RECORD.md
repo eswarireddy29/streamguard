@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-Phases A–D complete. Task 19 complete. Starting Task 20.
+**Status:** → Phases A–D complete. Tasks 19–20 complete. Starting Task 21.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -164,8 +164,8 @@ not reopen it.**
 
 **PHASE E — SERVING**
 19. ✅FastAPI scoring service + request validation
-20. ⬜ **← CURRENT.**Latency measurement (p50/p95) + tuning
-21. ⬜ Decision engine + business rules layer
+20. ✅Latency measurement (p50/p95) + tuning
+21. ⬜**← CURRENT.** Decision engine + business rules layer
 22. ⬜ Case management API (analyst queue, verdicts, audit)
 23. ⬜ JWT authentication + roles
 
@@ -1429,6 +1429,116 @@ already scored returns the cached result without touching state. It is
 the same rule my event log already had for at-least-once delivery, and
 I had not carried it into the HTTP layer."
 
+### Task 20 — Latency measurement ✅ 20 Oct
+
+**Files:** `src/streamguard/api/bench.py`, `scripts/measure_latency.py`,
+`scripts/measure_http_latency.py`
+
+**Budget: 100 ms** — the window between a swipe and the authorisation
+decision. The project record called for "a measured latency budget, not
+a guessed one"; this is the measurement.
+
+**Percentiles, not the mean.** A service with a 3 ms mean and a 400 ms
+p99 fails one request in a hundred, and that is the one the customer
+notices at the checkout.
+
+#### 20.3 — In-process (no HTTP, no network, no concurrency)
+
+**By stage, 2,000 transactions:**
+
+| stage | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| features | 0.15 | 0.25 | 0.34 | 1.08 |
+| graph | 0.28 | 0.48 | 0.98 | 1.63 |
+| predict | 0.23 | 0.40 | 0.60 | 5.25 |
+| **shap** | **6.78** | 8.66 | 10.96 | 10.96 |
+| **total** | **0.69** | **1.26** | **7.13** | **11.26** |
+
+**By decision path:**
+
+| path | n | p50 | p95 | p99 |
+|---|---|---|---|---|
+| approve (no SHAP) | 1,975 | 0.69 | 1.13 | 1.72 |
+| review/block (SHAP) | 25 | 7.50 | 9.23 | 11.26 |
+
+**SHAP costs 6.8 ms — 10.9× the approve path — but runs on only 1.2%
+of traffic.** That is the Task 19 design decision paying off: explain
+only what a human will look at. Explaining every approved transaction
+would make the common path 10× more expensive for an explanation
+nobody reads.
+
+**Verdict: PASS at p99 with 14× headroom** (7.13 ms against 100 ms).
+Throughput 1,227/sec single-process.
+
+#### 20.4 — Over HTTP
+
+| | concurrency 1 | concurrency 4 |
+|---|---|---|
+| client p50 | 15.84 ms | 27.21 ms |
+| client p95 | 32.38 ms | 43.09 ms |
+| client p99 | **34.14 ms** | **49.02 ms** |
+| client max | 36.09 ms | 55.66 ms |
+| server p50 | 1.38 ms | 2.27 ms |
+| throughput | 55 req/sec | **144 req/sec** |
+| decisions | approve 500 | approve 500 |
+
+**Both PASS at p99.**
+
+**The model is not the bottleneck — the framework is.** HTTP overhead is
+14.46 ms at concurrency 1, **91% of the round trip**. That is FastAPI
+routing, Pydantic validation, JSON serialisation and loopback
+networking. Scoring itself is 1.38 ms.
+
+**Concurrency gives sub-linear throughput:** 4× the clients gives 2.6×
+the throughput (55 → 144/sec), and server p50 rises 1.38 → 2.27 ms.
+**This is the cost of Option A.** `/score` is a synchronous function
+doing CPU work, so Python's GIL serialises concurrent requests inside a
+single uvicorn worker — and workers cannot be added without losing the
+shared in-memory state that Option A depends on. A durable state store
+(Option B) is what would allow horizontal scaling, at the cost of a
+round-trip per request.
+
+#### TWO MEASUREMENT BUGS FOUND AND FIXED
+
+Both produced plausible-looking numbers that were wrong — the same
+failure mode as every other bug in this project.
+
+**1. The benchmark measured its own cache.** A second run reused the
+same `BENCH%012d` transaction_refs, so the Task 19 idempotency cache
+returned cached results. Reported server p50 **0.01 ms** and
+**78,441/sec** — physically impossible, and the giveaway was identical
+decision counts across two runs. Fixed by making refs unique per run.
+
+**2. Warm-up and benchmark offsets drifted apart.** The server was
+warmed with 50,000 events while the benchmark replayed from offset
+200,000 — a 150,000-event gap. Every card arrived with a stale
+last-seen time, producing huge `seconds_since_prev` values and
+distorted velocity features. Result: `approve 53, review 231, block
+216` — 89% flagged against a 0.37% fraud rate, and server p50 inflated
+from 2.10 ms to 12.86 ms because nearly everything hit the SHAP path.
+Fixed by warming to the same offset the benchmark starts from.
+
+**The lesson is the one from Phase D again:** the decision counts, not
+the latency numbers, were what exposed both bugs. A latency figure
+alone looks fine whatever is wrong with the data behind it.
+
+**Interview talking point**
+
+*"My record called for a measured latency budget rather than a guessed
+one, so I measured it at both layers. In-process scoring is 0.69 ms at
+p50 and 7.13 ms at p99 against a 100 ms budget. Over HTTP it is 15.8 ms
+and 34.1 ms — so 91% of the round trip is FastAPI, Pydantic and
+loopback, not the model. SHAP is the expensive part at 6.8 ms, but it
+only runs on the 1.2% of traffic a human will actually review."*
+
+*"The measurement itself had two bugs, and both produced believable
+numbers. One run reported 78,000 requests a second because the
+benchmark was re-sending the same transaction IDs and hitting my own
+idempotency cache. Another showed 89% of transactions being blocked
+because the server's feature state was warmed to a different point in
+the event log than the benchmark replayed from. Both times the decision
+counts gave it away, not the latency."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -1643,7 +1753,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-**19 of 32 tasks complete. Phases A–D done, Phase E started.**
+**20 of 32 tasks complete.**
 
 ### What exists and works right now
 
@@ -1657,7 +1767,7 @@ alembic revision --autogenerate -m "description"
 | Tests | 44 passing — leakage, integrity, split, generator |
 | Explainability | SHAP, additivity verified to 1e-14. Per-transaction explanations ready for the Task 26 analyst view |
 | Tracking | MLflow local file backend, ~25 runs backfilled from Tasks 12–18 |
-| API | FastAPI `/score` + `/health`, in-memory state warmed from the event log. 3.4 ms approve, 46.7 ms block (SHAP) |
+| API | FastAPI `/score` + `/health`. In-process p50 0.69 ms / p99 7.13 ms. Over HTTP p50 15.8 ms / p99 34.1 ms. Budget 100 ms — PASS |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
@@ -1804,6 +1914,13 @@ judged by — it flatters imbalanced data.
   (3.49%) in v6, up from rank 21 in v5. Not a shortcut, but watch it.
 - **`ring_size` failed** — the generator assigns devices randomly, so
   there are no fraud rings to detect. State as a synthetic-data limit.
+- ~~SHAP cost unknown~~ **MEASURED at Task 20** — 6.8 ms, on 1.2% of
+  traffic. Not a problem.
+- **Concurrency is sub-linear** — 4× clients gives 2.6× throughput, GIL
+  bound in a single worker. Inherent to Option A; horizontal scaling
+  needs a durable state store.
+- **Warm-up/benchmark offsets must match** or the decision mix is
+  nonsense. Set `STREAMGUARD_WARM_EVENTS` to the benchmark's `--skip`.
 
 ### Three bugs already found — all of them silent
 
