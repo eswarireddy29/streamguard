@@ -1,0 +1,115 @@
+{
+  "created_at": "2026-10-20T11:04:26",
+  "block": "validation",
+  "random_pr_auc": 0.00438710347333991,
+  "results": [
+    {
+      "model": "isolation_forest",
+      "block": "val",
+      "n": 115566,
+      "n_fraud": 507,
+      "prevalence": 0.00438710347333991,
+      "pr_auc": 0.38421721014207677,
+      "pr_auc_random": 0.00438710347333991,
+      "lift_over_random": 87.57878916623125,
+      "roc_auc": 0.8543994742908076,
+      "k": 1300,
+      "alerts_per_day": 100,
+      "precision_at_k": 0.20384615384615384,
+      "recall_at_k": 0.5226824457593688,
+      "fraud_caught_at_k": 265,
+      "accuracy_always_negative": 0.9956128965266601,
+      "per_pattern_recall_at_k": {
+        "account_takeover": 0.03870967741935484,
+        "card_not_present": 0.038461538461538464,
+        "card_testing": 0.937007874015748,
+        "geo_impossible": 0.7647058823529411,
+        "merchant_collusion": 0.20689655172413793
+      },
+      "per_pattern_n": {
+        "account_takeover": 155,
+        "card_not_present": 52,
+        "card_testing": 254,
+        "geo_impossible": 17,
+        "merchant_collusion": 29
+      },
+      "binary_precision": 0.08395629672225417,
+      "binary_recall": 0.5759368836291914,
+      "binary_f1": 0.1465495608531995,
+      "binary_flagged": 3478,
+      "notes": []
+    },
+    {
+      "model": "mahalanobis",
+      "block": "val",
+      "n": 115566,
+      "n_fraud": 507,
+      "prevalence": 0.00438710347333991,
+      "pr_auc": 0.5295489461791374,
+      "pr_auc_random": 0.00438710347333991,
+      "lift_over_random": 120.70582547167297,
+      "roc_auc": 0.9537872971542788,
+      "k": 1300,
+      "alerts_per_day": 100,
+      "precision_at_k": 0.23461538461538461,
+      "recall_at_k": 0.6015779092702169,
+      "fraud_caught_at_k": 305,
+      "accuracy_always_negative": 0.9956128965266601,
+      "per_pattern_recall_at_k": {
+        "account_takeover": 0.0967741935483871,
+        "card_not_present": 1.0,
+        "card_testing": 0.8582677165354331,
+        "geo_impossible": 0.7058823529411765,
+        "merchant_collusion": 0.27586206896551724
+      },
+      "per_pattern_n": {
+        "account_takeover": 155,
+        "card_not_present": 52,
+        "card_testing": 254,
+        "geo_impossible": 17,
+        "merchant_collusion": 29
+      },
+      "binary_precision": 0.26124567474048443,
+      "binary_recall": 0.5956607495069034,
+      "binary_f1": 0.36319903788334335,
+      "binary_flagged": 1156,
+      "notes": []
+    },
+    {
+      "model": "lightgbm",
+      "block": "val",
+      "n": 115566,
+      "n_fraud": 507,
+      "prevalence": 0.00438710347333991,
+      "pr_auc": 0.9524901400384305,
+      "pr_auc_random": 0.00438710347333991,
+      "lift_over_random": 217.11139156544627,
+      "roc_auc": 0.9975693115373293,
+      "k": 1300,
+      "alerts_per_day": 100,
+      "precision_at_k": 0.3776923076923077,
+      "recall_at_k": 0.9684418145956607,
+      "fraud_caught_at_k": 491,
+      "accuracy_always_negative": 0.9956128965266601,
+      "per_pattern_recall_at_k": {
+        "account_takeover": 0.9161290322580645,
+        "card_not_present": 1.0,
+        "card_testing": 0.9921259842519685,
+        "geo_impossible": 1.0,
+        "merchant_collusion": 0.9655172413793104
+      },
+      "per_pattern_n": {
+        "account_takeover": 155,
+        "card_not_present": 52,
+        "card_testing": 254,
+        "geo_impossible": 17,
+        "merchant_collusion": 29
+      },
+      "binary_precision": null,
+      "binary_recall": null,
+      "binary_f1": null,
+      "binary_flagged": null,
+      "notes": []
+    }
+  ]
+}

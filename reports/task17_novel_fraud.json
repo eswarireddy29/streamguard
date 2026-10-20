@@ -1,0 +1,52 @@
+{
+  "created_at": "2026-10-20T11:09:43",
+  "k": 1300,
+  "block": "validation",
+  "results": [
+    {
+      "pattern": "account_takeover",
+      "n_train_removed": 434,
+      "n_val": 155,
+      "supervised_recall": 0.33548387096774196,
+      "isolation_recall": 0.03870967741935484,
+      "mahalanobis_recall": 0.0967741935483871,
+      "supervised_pr_auc": 0.7626988425534782
+    },
+    {
+      "pattern": "card_not_present",
+      "n_train_removed": 290,
+      "n_val": 52,
+      "supervised_recall": 0.0,
+      "isolation_recall": 0.038461538461538464,
+      "mahalanobis_recall": 1.0,
+      "supervised_pr_auc": 0.8480300632801784
+    },
+    {
+      "pattern": "card_testing",
+      "n_train_removed": 1087,
+      "n_val": 254,
+      "supervised_recall": 0.0,
+      "isolation_recall": 0.937007874015748,
+      "mahalanobis_recall": 0.8582677165354331,
+      "supervised_pr_auc": 0.4573733691232838
+    },
+    {
+      "pattern": "geo_impossible",
+      "n_train_removed": 91,
+      "n_val": 17,
+      "supervised_recall": 0.7647058823529411,
+      "isolation_recall": 0.7647058823529411,
+      "mahalanobis_recall": 0.7058823529411765,
+      "supervised_pr_auc": 0.9422142051646076
+    },
+    {
+      "pattern": "merchant_collusion",
+      "n_train_removed": 132,
+      "n_val": 29,
+      "supervised_recall": 0.41379310344827586,
+      "isolation_recall": 0.20689655172413793,
+      "mahalanobis_recall": 0.27586206896551724,
+      "supervised_pr_auc": 0.9255377675098453
+    }
+  ]
+}

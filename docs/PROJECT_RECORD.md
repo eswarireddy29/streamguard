@@ -969,6 +969,28 @@ between them. Real card fraud is not that separable. Three generator
 label proxies were found and fixed at Task 13.7; there may be more this
 audit does not detect.
 
+### Task 16 — Cost-based threshold ✅ 20 Oct
+
+**Files:** `src/streamguard/ml/costs.py`, `scripts/optimize_threshold.py`
+
+**Why 0.5 is the wrong threshold.** It is correct only when a false
+positive and a false negative cost the same. Here:
+
+| mistake | cost | why |
+|---|---|---|
+| missed fraud | ₹5,000 | the money is gone |
+| blocked customer | ₹200 | support call, churn risk |
+| analyst review | ₹50 | staff time, not money lost |
+
+**25:1 asymmetry** — it is worth blocking ~25 legitimate transactions
+to catch one fraud. These are ASSUMPTIONS, not measured figures; a real
+bank would take them from chargeback data and churn analysis. They are
+stated explicitly so the threshold can be re-run with other numbers.
+
+**The theoretical answer.** Block when the expected cost of approving
+exceeds the expected cost of blocking:
+
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -1195,7 +1217,8 @@ alembic revision --autogenerate -m "description"
 | Stream processor | ~6,700 events/s, 0 errors, resumption across processes verified |
 | Features | 49 features, `data/processed/features.parquet`, 140 MB, 0 NaN/inf |
 |44 passing — leakage, integrity, split, generator; add rows: Data | 791,109 transactions, 3,000 fraud (0.379%) and Model | LightGBM, val PR-AUC 0.9201 (random 0.0044)
-| Model | LightGBM tuned, **test PR-AUC 0.9573**, val 0.9525, calibrated (ECE 0.0005) |
+| Model | LightGBM tuned, **test PR-AUC 0.9573**, val 0.9525, calibrated (ECE 0.0005) 
+| Decision | Threshold 0.03061 (cost-optimised, 25:1). Test: recall 0.9499, ₹344,400 saved vs 0.5 ||
 
 
 
@@ -1322,6 +1345,8 @@ judged by — it flatters imbalanced data.
 - **Test set is used.** One access, logged. Do not tune against it.
 - **Overfitting gap 0.0799** — train hits PR-AUC 1.0 by iteration 400.
   Task 14: lower `num_leaves`, raise `min_child_samples`.
+- **Test set accessed twice**, both logged with reasons (Task 15
+  evaluation, Task 16 threshold reporting). No tuning against it.
 - **merchant_collusion distance** mean 258 km vs median 20.5 km — the
   25-try rejection loop occasionally fails for isolated merchants.
   Median is fine; not worth a regeneration.
