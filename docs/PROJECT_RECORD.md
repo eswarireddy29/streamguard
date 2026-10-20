@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → PHASE D COMPLETE (Tasks 12–18). Starting Phase E, Task 19..
+Phases A–D complete. Task 19 complete. Starting Task 20.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -160,11 +160,11 @@ not reopen it.**
 15. ✅ Evaluation: PR-AUC, precision@k, calibration curve
 16. ✅Cost-based threshold optimisation
 17. ✅Unsupervised anomaly detector for unseen fraud types
-18. ✅**current**Graph features (NetworkX) + SHAP + MLflow tracking
+18. ✅Graph features (NetworkX) + SHAP + MLflow tracking
 
 **PHASE E — SERVING**
-19. ⬜**← CURRENT.**FastAPI scoring service + request validation
-20. ⬜ Latency measurement (p50/p95) + tuning
+19. ✅FastAPI scoring service + request validation
+20. ⬜ **← CURRENT.**Latency measurement (p50/p95) + tuning
 21. ⬜ Decision engine + business rules layer
 22. ⬜ Case management API (analyst queue, verdicts, audit)
 23. ⬜ JWT authentication + roles
@@ -1306,6 +1306,128 @@ actually helped were device and merchant volume counts, which are LOWER
 for fraud, and they lifted merchant-collusion recall from 96.6% to 100%
 because collusion is a merchant-level property my per-transaction
 features could not see."*
+## PHASE E — SERVING
+
+### Task 19 — FastAPI scoring service ✅ 20 Oct
+
+**Files:** `src/streamguard/api/{__init__,schemas,scorer,main}.py`
+
+#### ARCHITECTURE DECISION — Option A: in-memory state, warmed at startup
+
+The feature engine is **stateful**. `compute_features()` reads this
+card's running mean, its last location, its 5-minute velocity. That
+state has to come from somewhere. Three options were weighed:
+
+| option | pro | con |
+|---|---|---|
+| **A: in-memory, warmed at startup** | fast, no round-trip in the hot path | lost on restart, single process |
+| B: state in PostgreSQL | durable, scales horizontally | a DB query inside the latency budget |
+| C: client sends features | trivial, fastest | moves training/serving skew to the client |
+
+**Chose A**, because Task 20 measures the latency budget and option B
+puts a database query in the critical path before anything has been
+measured. A also makes the Task 20 comparison meaningful: measure A,
+then measure B, and show the cost of durability in milliseconds.
+C was ruled out — it moves the hard problem to the client, and
+training/serving skew is the failure this project exists to address.
+
+**Costs of this choice, stated plainly:** state is lost on restart;
+warm-up replays the event log (8.5s for 50k events, so roughly 2
+minutes for the full 791k); one process only.
+
+#### THE SECURITY RULE
+
+The request schema sets `extra="forbid"`, which **rejects `is_fraud`
+and `fraud_type`**. The Task 8 event payload carries both (a
+deliberate, documented choice), so a client could send them. A client
+sending the answer is either confused or probing.
+
+Verified: posting `is_fraud: false` returns **422** with
+`type: extra_forbidden`, `loc: ["body", "is_fraud"]`. Pydantic rejects
+it before any project code runs.
+
+#### BUG FOUND IN TESTING — missing idempotency
+
+The first manual test returned `decision: block` on an ordinary ₹845
+restaurant purchase, with `txn_count_5m = 3`,
+`distance_from_prev_km = 0` and `implied_speed_kmh = 99999`.
+
+**Cause:** the same transaction was POSTed three times while testing
+the form. Each POST called `score()` → `computer.process()`, which
+**updates state**. By the third call the card looked like it was being
+tested: three transactions, same place, seconds apart. The 99,999 is
+the implied-speed sentinel — zero distance over ~zero seconds, the same
+division the Task 13.7C generator bug produced.
+
+**Fix:** a bounded `transaction_ref` cache (100,000 entries, LRU by
+insertion). A ref already scored returns the cached result **without
+touching state**. Task 8 established that consumers must be idempotent
+under at-least-once delivery; the same applies to a retried HTTP POST.
+
+**Verified:** two identical POSTs → `scored: 1`,
+`duplicates_rejected: 1`. The `scored` count staying at 1 is the proof
+that state was touched once.
+
+#### VERIFIED BEHAVIOUR
+
+| test | result |
+|---|---|
+| `/health` | ready, lgbm_v6, 58 features, 6,967 cards, 792 merchants |
+| ordinary ₹845 purchase at home | **approve**, p = 0.000155, **3.4 ms** |
+| ₹94,500 jewellery, Dubai, 3am, manual entry | **block**, p = 0.756, **46.7 ms** |
+| `is_fraud` in the body | **422 extra_forbidden** |
+| duplicate POST | `duplicate: true`, state untouched |
+
+**The high-risk explanation, as an analyst would see it:**
+
+| feature | value | SHAP |
+|---|---|---|
+| is_manual_entry | 1 | **+6.40** |
+| distance_from_home_km | 2,066.22 | +1.20 |
+| hour_of_day | 3 | +0.72 |
+| is_new_device | 1 | +0.65 |
+| amount | 94,500 | +0.56 |
+
+Jaipur → Dubai computed as 2,066 km from the submitted coordinates,
+which matches reality. This is the Task 26 investigation view already
+working end to end.
+
+#### LATENCY — A PREVIEW OF TASK 20
+
+**3.4 ms approved vs 46.7 ms blocked.** SHAP costs roughly 40 ms, and
+it only runs on the non-approve path:
+
+> *"Only explain what a human will look at. Explaining every approved
+> transaction would double the cost of the common path for an
+> explanation nobody reads."*
+
+**That 46.7 ms is already most of a 100 ms budget**, on a warm cache
+with a single request and no concurrency. Task 20 measures p50/p95
+properly, but the shape of the problem is already visible: SHAP is the
+cost, and the decision to skip it on approvals is what keeps the common
+path cheap.
+
+#### SIGNATURES DISCOVERED (do not guess these again)
+
+- `FeatureComputer.process(payload: dict) -> dict[str, float]` — takes
+  the raw event payload dict, returns 49 floats
+- `FileEventConsumer(root: Path, topic="transactions", group="default",
+  from_beginning=False)` — root is `data/events`, NOT
+  `data/events/transactions`
+- `StateStore` has `card()`, `customer()`, `merchant()`, `clear()`,
+  `summary()` — **no `.cards` attribute**
+
+**Interview talking point**
+
+*"My first manual test of the API returned 'block' on an ordinary ₹845
+restaurant purchase. The reasons showed three transactions in five
+minutes and an implied speed of 99,999 km/h — but I had only sent one
+transaction, three times, while testing the form. Each POST was folding
+the same transaction into the feature state, so the card looked like it
+was being card-tested. The fix was idempotency: a transaction_ref
+already scored returns the cached result without touching state. It is
+the same rule my event log already had for at-least-once delivery, and
+I had not carried it into the HTTP layer."
 
 #### The editable install — a structural fix
 
@@ -1521,7 +1643,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-**18 of 32 tasks complete. Phases A–D done. Starting Phase E (serving).**
+**19 of 32 tasks complete. Phases A–D done, Phase E started.**
 
 ### What exists and works right now
 
@@ -1535,6 +1657,7 @@ alembic revision --autogenerate -m "description"
 | Tests | 44 passing — leakage, integrity, split, generator |
 | Explainability | SHAP, additivity verified to 1e-14. Per-transaction explanations ready for the Task 26 analyst view |
 | Tracking | MLflow local file backend, ~25 runs backfilled from Tasks 12–18 |
+| API | FastAPI `/score` + `/health`, in-memory state warmed from the event log. 3.4 ms approve, 46.7 ms block (SHAP) |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
