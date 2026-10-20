@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** Phases A, B, C complete. Tasks 12–17 complete. Starting Task 18.
+**Status:** → PHASE D COMPLETE (Tasks 12–18). Starting Phase E, Task 19..
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -160,10 +160,10 @@ not reopen it.**
 15. ✅ Evaluation: PR-AUC, precision@k, calibration curve
 16. ✅Cost-based threshold optimisation
 17. ✅Unsupervised anomaly detector for unseen fraud types
-18. ⬜**current**Graph features (NetworkX) + SHAP + MLflow tracking
+18. ✅**current**Graph features (NetworkX) + SHAP + MLflow tracking
 
 **PHASE E — SERVING**
-19. ⬜ FastAPI scoring service + request validation
+19. ⬜**← CURRENT.**FastAPI scoring service + request validation
 20. ⬜ Latency measurement (p50/p95) + tuning
 21. ⬜ Decision engine + business rules layer
 22. ⬜ Case management API (analyst queue, verdicts, audit)
@@ -1102,6 +1102,210 @@ are contextually fraudulent but individually ordinary, like account
 takeover, where you need to know the customer's history to see anything
 wrong."*
 
+### Task 18 — Graph features + SHAP + MLflow ✅ 20 Oct
+
+**Files:** `src/streamguard/features/graph.py`,
+`scripts/build_graph_features.py`, `scripts/train_with_graph.py`,
+`src/streamguard/ml/explain.py`, `scripts/explain_model.py`,
+`src/streamguard/ml/tracking.py`, `scripts/log_experiments.py`
+
+---
+
+#### 18A — Graph features
+
+**The gap they fill.** The 49 existing features describe ONE transaction
+and ONE card's own history. They cannot see that this card and that card
+both used the same device last week. Fraud rings share infrastructure,
+and that sharing is only visible in the network.
+
+**No look-ahead, structurally.** The graph is built incrementally in
+chronological order with the same contract as Task 10: `compute()`
+reads, `update()` writes, `process()` is the only place the order is
+fixed. A day-10 feature cannot know about day 80.
+
+**`device_ref` was missing from the feature file** — the Task 10 writer
+kept only the derived `is_new_device` flag, not the raw id. The graph
+needs to know WHICH device, so it is joined back from the database on
+`transaction_ref`. Present on 784,041 of 791,109 rows; the 7,068 nulls
+are card-present POS transactions with no device, which correctly get
+0 for device features.
+
+**Graph size:** 7,295 cards, 8,313 devices, 800 merchants, 49,874
+card–device edges, 481,155 card–merchant edges, **3,597 shared devices**.
+
+**Two features dropped as dead:**
+
+- `ring_size` — 36.78 normal vs 36.38 fraud at a cap of 50 (and 156 vs
+  162 at a cap of 200). **One hop saturates**: with 7,295 cards sharing
+  8,313 devices, the average card touches ~7 devices and each device
+  serves ~6 cards, so every card has ~40 neighbours by construction. The
+  feature measures connectivity, not rings. **The generator assigns
+  devices randomly, so there are no rings to find** — a limitation of
+  the synthetic data, not of the approach.
+- `ring_fraud_density` — constant 0.0 by design. Filling it from labels
+  would be leakage; in production it would come from CONFIRMED analyst
+  verdicts, which is a Task 30 input.
+
+**Result: +0.0157 PR-AUC** (0.9518 → 0.9675 on the same validation
+block). **merchant_collusion recall 96.6% → 100%** — collusion is a
+merchant-level property and these are the first merchant-network
+features in the model. Overfit gap unchanged at 0.0276.
+
+**A prediction that failed, and why it is instructive.**
+`device_card_velocity_1h` had by far the strongest standalone ratio
+(6.44× — 0.0912 normal vs 0.5870 fraud) and was expected to be the key
+feature. It ranks **49 of 58 at 0.00% gain** — essentially unused. It is
+redundant with `txn_count_1h` and `distinct_merchants_1h`, which the
+model already leans on. **A high univariate ratio does not mean a
+feature adds anything; the model may already have that information.**
+
+**The useful graph features are the "low = fraud" ones:**
+`device_card_count_7d` (rank 9, 2.23%), `device_card_count` (rank 10,
+1.77%), `merchant_card_count_7d` (rank 14, 1.16%) — all with ratios
+BELOW 1.0. Fraud happens on low-traffic devices and low-volume
+merchants. Graph features hold 5.69% of total gain.
+
+---
+
+#### 18B — SHAP
+
+**What it adds over importance.** Feature importance says what the model
+uses overall. SHAP decomposes a SINGLE prediction into per-feature
+contributions that SUM to that prediction, so an analyst sees "flagged
+because velocity was 3× normal AND the amount was ₹36" rather than a
+bare score. This feeds the Task 26 investigation view.
+
+**Additivity verified, not assumed.** SHAP values + base value must
+equal the raw prediction. **Max difference 1.07e-14** across 100 rows —
+machine precision. If this failed the explanations would be wrong and
+must not be shown to an analyst.
+
+**A FEATURE REMOVED BECAUSE OF SHAP.** `card_age_days` came out at SHAP
+rank 1 with **13.54%** of mean |SHAP|. Checking the distributions:
+
+| | normal | fraud |
+|---|---|---|
+| mean | 44.10 | 46.57 |
+| median | 44.08 | 48.35 |
+| std | 26.01 | 24.67 |
+| range | 0–89.98 | 0–89.64 |
+
+Nearly identical — **no fraud signal at all**. And the 0–90 range is the
+giveaway: the simulation is 90 days long, so this is **days since
+simulation start, a TIME INDEX**, not card age. The model was splitting
+on *when in the window* a transaction happened, fitting noise in how
+2,034 training frauds happened to be distributed across 90 days.
+
+**Removing it changed PR-AUC from 0.9674 to 0.9675** — the single
+largest SHAP contributor was worth nothing. The overfit gap also
+improved, 0.0307 → 0.0276. **This is the clearest demonstration in the
+project that mean |SHAP| measures INFLUENCE, not USEFULNESS.**
+
+**SHAP and gain disagree sharply, and both are right:**
+
+| feature | SHAP rank | gain rank | moved |
+|---|---|---|---|
+| is_manual_entry | 39 | 2 | −37 |
+| distinct_merchants_1h | 38 | 1 | −37 |
+| is_new_mcc | 7 | 35 | +28 |
+| merchant_txn_count | 9 | 31 | +22 |
+
+`is_manual_entry` has SHAP **+12.55** on one CNP transaction — enormous.
+But it is 1.0 on only ~290 of 115,566 rows, so its MEAN |SHAP| is tiny.
+**Gain measures total objective improvement; SHAP measures average
+per-row influence.** A feature decisive for 0.25% of rows and irrelevant
+for the rest scores high on one and low on the other. Quote whichever
+answers the question being asked.
+
+**Top features by mean |SHAP| (v6):** `distance_from_home_km` 14.08%,
+`amount` 8.73%, `merchant_is_online` 8.15%, `merchant_amount_std` 6.18%,
+`device_card_count_7d` 4.77%.
+
+**COLLUSION SHORTCUT — LOW-MODERATE, keep watching.** Task 10 warned the
+model might learn "low-volume merchant" instead of "inflated amounts".
+SHAP on v6: `merchant_txn_count` rank 9 (3.49%), `merchant_is_online`
+rank 3 (8.15%), `merchant_card_count_7d` rank 15 (2.13%). **Not a
+shortcut, but higher than v5** (rank 21, 1.70%), and the worked example
+shows `merchant_txn_count = 131` with SHAP **−0.0129** — pushing AWAY
+from fraud, the opposite of the feared behaviour. The six fixed
+low-volume offline collusion merchants remain a synthetic-data
+limitation worth stating in the report.
+
+**A worked example — what an analyst would see (card_testing, score
+0.99985, base rate 0.00004):**
+
+| feature | value | SHAP |
+|---|---|---|
+| distinct_merchants_1h | 3.00 | **+3.77** |
+| amount | 35.96 | **+3.03** |
+| txn_count_5m | 3.00 | **+2.71** |
+| distance_from_prev_km | 0.00 | **+2.65** |
+| merchant_is_online | 0.00 | +1.11 |
+
+Three merchants in an hour, a ₹36 amount, three transactions in five
+minutes, zero distance moved. That is a card-testing burst described in
+features, not a score.
+
+---
+
+#### 18C — MLflow
+
+**Why it earns its place beyond tidiness.** Eight model versions exist
+across Tasks 13–18 with results in separate JSON files. That works while
+the project is fresh. It stops working at **Task 30**, when retraining
+from analyst labels has to answer *"is this better than what is
+deployed?"* — a question you cannot settle by comparing a number on
+screen against a file from three weeks ago.
+
+**Local file backend** (`./mlruns`). No server, no database, no cost.
+Gitignored — regenerable from the report JSONs, and model artifacts
+would bloat the repo.
+
+**Backfilled from the report files**, so the history is reconstructed
+from measurements rather than retyped: Task 12 baselines, Task 14
+imbalance comparison and tuned model, Task 15 test evaluation, Task 16
+threshold, Task 17 anomaly detectors and holdout experiment, Task 18
+graph models.
+
+**params vs metrics:** params are what was CHOSEN (hyperparameters,
+feature count, strategy), metrics are what was MEASURED. Mixing them
+makes the history unreadable — you search over params to improve
+metrics.
+
+**UI:** `mlflow ui --backend-store-uri mlruns` → http://127.0.0.1:5000
+
+---
+
+#### FINAL PHASE D MODEL: `models/lgbm_v6.txt`
+
+58 features (48 base + 10 graph). **Validation PR-AUC 0.9675**,
+precision@1300 0.3808, recall@1300 0.9763, overfit gap 0.0276, 152
+trees. Per-pattern: card_not_present 100%, geo_impossible 100%,
+card_testing 99.2%, merchant_collusion 100%, account_takeover 93.5%.
+
+**NOTE:** v6 has NOT been evaluated on the test set. The Task 15 test
+number (0.9573) belongs to v4. Evaluating v6 on test would be a third
+access and should wait until Phase E is settled, if it happens at all.
+
+**Interview talking points**
+
+*"SHAP found a feature I would never have caught by eye. `card_age_days`
+was my top contributor at 13.5% of mean |SHAP|, so I checked its
+distribution: mean 44.1 for normal, 46.6 for fraud, identical spread.
+No signal. And the range was 0 to 90 on a 90-day simulation — it was a
+time index, not card age. The model was splitting on when in the window
+a transaction happened. I removed it and PR-AUC went from 0.9674 to
+0.9675. The single largest SHAP contributor was worth nothing, which is
+the difference between influence and usefulness."*
+
+*"My graph features worked, but not the one I expected. Distinct cards
+on a device within an hour had a 6.4× fraud-to-normal ratio — by far the
+strongest signal on paper — and the model used it for 0.00% of gain.
+It was redundant with velocity features already in the model. What
+actually helped were device and merchant volume counts, which are LOWER
+for fraud, and they lifted merchant-collusion recall from 96.6% to 100%
+because collusion is a merchant-level property my per-transaction
+features could not see."*
 
 #### The editable install — a structural fix
 
@@ -1317,7 +1521,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-**17 of 32 tasks complete.**
+**18 of 32 tasks complete. Phases A–D done. Starting Phase E (serving).**
 
 ### What exists and works right now
 
@@ -1325,10 +1529,12 @@ alembic revision --autogenerate -m "description"
 |---|---|
 | Database | PostgreSQL 17.11, 9 tables, Alembic migrations applied |
 | Data | 791,109 transactions over 90 days, 3,000 fraud (0.379%) across 5 patterns |
-| Model | LightGBM tuned, **test PR-AUC 0.9573**, val 0.9525, calibrated (ECE 0.0005) |
+| Model | LightGBM v6, 58 features (48 base + 10 graph). Val PR-AUC 0.9675, gap 0.0276. v4 (49 feat) scored test 0.9573 |
 | Decision | Threshold 0.03061 (cost-optimised, 25:1). Test: recall 0.9499, ₹344,400 saved vs 0.5 |
 | Anomaly | Isolation Forest + Mahalanobis, fitted on normal only. Catch 93.7% / 100% of patterns LightGBM scores 0.0% on |
 | Tests | 44 passing — leakage, integrity, split, generator |
+| Explainability | SHAP, additivity verified to 1e-14. Per-transaction explanations ready for the Task 26 analyst view |
+| Tracking | MLflow local file backend, ~25 runs backfilled from Tasks 12–18 |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
@@ -1469,6 +1675,12 @@ judged by — it flatters imbalanced data.
   Task 13.7.
 - **No latency measurement yet** — Task 20. The record calls a measured
   latency budget a defining feature of this project.
+- **v6 not evaluated on test.** The 0.9573 test number is v4's. A third
+  test access should wait until Phase E is settled, if at all.
+- **Collusion shortcut LOW-MODERATE** — `merchant_txn_count` SHAP rank 9
+  (3.49%) in v6, up from rank 21 in v5. Not a shortcut, but watch it.
+- **`ring_size` failed** — the generator assigns devices randomly, so
+  there are no fraud rings to detect. State as a synthetic-data limit.
 
 ### Three bugs already found — all of them silent
 
