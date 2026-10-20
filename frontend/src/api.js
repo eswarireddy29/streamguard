@@ -196,3 +196,11 @@ const PERMISSIONS = {
 export function can(permission, role = getRole()) {
   return (PERMISSIONS[role] || []).includes(permission)
 }
+
+export function recentDecisions({ limit = 50, sinceId = 0 } = {}) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    since_id: String(sinceId),
+  })
+  return request(`/recent-decisions?${params}`)
+}

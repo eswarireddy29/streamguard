@@ -2045,7 +2045,7 @@ alembic revision --autogenerate -m "description"
 | Decisions | Policy rules + cost thresholds, most-severe-wins, full audit trail. 10/10 rule cases pass |
 | Cases | Analyst queue sorted by exposure, verdicts as training labels, append-only audit trail. 61 features stored per decision |
 | Auth | JWT, 3 roles (service/analyst/risk_manager), permissions as data. 7/7 access cases pass. Audit identity from token |
-| Frontend | React + Vite on 5173, /api proxied to 8000. JWT session in sessionStorage, role-aware nav |
+| Frontend | React + Vite, 3 tabs. Live stream polling /recent-decisions every 2s, fed by replay_stream.py at a chosen rate |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |

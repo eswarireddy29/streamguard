@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import * as api from './api'
+import LiveStream from './LiveStream'
 import './App.css'
 
 function Login({ onSignedIn }) {
@@ -81,7 +82,7 @@ function HealthBar() {
 export default function App() {
   const [signedIn, setSignedIn] = useState(Boolean(api.getToken()))
   const [me, setMe] = useState(null)
-
+  const [tab, setTab] = useState('stream')
   useEffect(() => {
     if (!signedIn) return
     api.whoami().then(setMe).catch(() => setSignedIn(false))
@@ -107,31 +108,44 @@ export default function App() {
 
       <HealthBar />
 
-      <main>
-        <div className="card">
-          <h2>Signed in</h2>
-          <p className="muted">
-            The shell, API client and session are working. Pages arrive in Tasks 25-27.
-          </p>
-          <table className="kv">
-            <tbody>
-              <tr><th>User</th><td>{me?.username}</td></tr>
-              <tr><th>Role</th><td>{me?.role}</td></tr>
-              <tr><th>Permissions</th><td>{(me?.permissions ?? []).join(', ')}</td></tr>
-              <tr><th>Token expires</th><td>{me?.expires_at?.slice(0, 19).replace('T', ' ')}</td></tr>
-            </tbody>
-          </table>
+          <nav className="tabs">
+        <button
+          className={tab === 'stream' ? 'active' : ''}
+          onClick={() => setTab('stream')}
+          disabled={!api.can('read_cases')}
+        >
+          Live stream
+        </button>
+        <button
+          className={tab === 'cases' ? 'active' : ''}
+          onClick={() => setTab('cases')}
+          disabled={!api.can('read_cases')}
+        >
+          Case queue
+        </button>
+        <button
+          className={tab === 'risk' ? 'active' : ''}
+          onClick={() => setTab('risk')}
+          disabled={!api.can('read_stats')}
+        >
+          Risk dashboard
+        </button>
+      </nav>
 
-          <div className="nav-preview">
-            <span className={api.can('read_cases') ? '' : 'disabled'}>Live stream (Task 25)</span>
-            <span className={api.can('read_cases') ? '' : 'disabled'}>Case queue (Task 26)</span>
-            <span className={api.can('read_stats') ? '' : 'disabled'}>Risk dashboard (Task 27)</span>
+      <main>
+        {tab === 'stream' && <LiveStream />}
+        {tab === 'cases' && (
+          <div className="card">
+            <h2>Case queue</h2>
+            <p className="muted">Arrives in Task 26.</p>
           </div>
-          <p className="muted small">
-            Greyed items are hidden for this role. The server enforces this with 403 -
-            the UI only avoids showing a button that would fail.
-          </p>
-        </div>
+        )}
+        {tab === 'risk' && (
+          <div className="card">
+            <h2>Risk dashboard</h2>
+            <p className="muted">Arrives in Task 27.</p>
+          </div>
+        )}
       </main>
     </div>
   )

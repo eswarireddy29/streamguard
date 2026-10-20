@@ -158,3 +158,104 @@ button.link {
   padding: 0.1rem 0.3rem;
   border-radius: 3px;
 }
+/* Task 25 - live stream */
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tabs button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.tabs button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.stream-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.stream-head h2 { margin: 0; font-size: 1rem; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 1.2rem 0;
+}
+
+.stat { background: var(--panel); padding: 0.9rem 1rem; }
+.stat-value { font-size: 1.4rem; font-weight: 600; }
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 0.2rem;
+}
+.stat.ok .stat-value { color: var(--ok); }
+.stat.warn .stat-value { color: var(--warn); }
+.stat.bad .stat-value { color: var(--bad); }
+
+.stream-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.stream-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+.stream-table td {
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+}
+.stream-table tr.row-block { background: rgba(248, 81, 73, 0.06); }
+.stream-table tr.row-review { background: rgba(210, 153, 34, 0.06); }
+
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-family: ui-monospace, "Cascadia Code", monospace; font-size: 0.8rem; }
+
+.pill {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.pill.approve { background: rgba(63, 185, 80, 0.15); color: var(--ok); }
+.pill.review { background: rgba(210, 153, 34, 0.15); color: var(--warn); }
+.pill.block { background: rgba(248, 81, 73, 0.15); color: var(--bad); }
+
+.empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 2;
+}
+.empty code {
+  background: var(--bg);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}

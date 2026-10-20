@@ -99,7 +99,6 @@ class CaseRepository:
     """Reads and writes decisions, cases and audit events."""
 
     # ---------- writing ----------
-
     def record_decision(self, transaction_ref: str, result: dict,
                         features: dict, open_case: bool = True) -> dict:
         """Persist one scoring result, and open a case if it was flagged.
@@ -379,4 +378,50 @@ class CaseRepository:
                       for r in c],
             "labels_available": {r[0]: r[1] for r in labels},
             "audit_events": events,
+        }
+
+    def recent_decisions(self, limit: int = 50,
+                         since_id: int = 0) -> dict:
+        """Decisions newest-first, for the live stream page.
+
+        `since_id` lets the client ask only for what it has not seen.
+        Re-sending the whole window every poll would grow the payload
+        with the table and make the page slower the longer it runs.
+        """
+        with get_session() as s:
+            rows = s.execute(
+                text("""
+                    SELECT d.id, t.transaction_ref, d.score, d.action,
+                           t.amount, t.city, t.country, t.channel,
+                           t.entry_mode, t.occurred_at, d.decided_at,
+                           d.latency_ms, d.model_version,
+                           c.case_ref
+                    FROM decisions d
+                    JOIN transactions t ON t.id = d.transaction_id
+                    LEFT JOIN cases c ON c.decision_id = d.id
+                    WHERE d.id > :since
+                    ORDER BY d.id DESC
+                    LIMIT :lim
+                """),
+                {"since": since_id, "lim": limit},
+            ).fetchall()
+
+            totals = s.execute(text("""
+                SELECT action, COUNT(*), AVG(latency_ms)
+                FROM decisions GROUP BY action
+            """)).fetchall()
+
+        return {
+            "decisions": [{
+                "id": r[0], "transaction_ref": r[1], "score": float(r[2]),
+                "action": r[3], "amount": float(r[4]), "city": r[5],
+                "country": r[6], "channel": r[7], "entry_mode": r[8],
+                "occurred_at": r[9].isoformat() if r[9] else None,
+                "decided_at": r[10].isoformat() if r[10] else None,
+                "latency_ms": float(r[11]), "model_version": r[12],
+                "case_ref": r[13],
+            } for r in rows],
+            "totals": {r[0]: {"n": r[1], "mean_latency_ms": float(r[2] or 0)}
+                       for r in totals},
+            "max_id": max((r[0] for r in rows), default=since_id),
         }

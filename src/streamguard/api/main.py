@@ -289,6 +289,18 @@ def login(req: LoginRequest) -> dict:
     log.info("login_ok", username=user.username, role=user.role)
     return create_token(user)
 
+@app.get("/recent-decisions")
+def recent_decisions(limit: int = 50, since_id: int = 0,
+                     user: TokenData = Depends(require("read_cases"))) -> dict:
+    """Decisions newest-first, for the live stream page.
+
+    Polling, not websockets: the page refreshes every couple of
+    seconds and a dropped poll is self-healing, where a dropped socket
+    needs reconnection logic. For a console watched by a handful of
+    analysts, that complexity is not worth buying.
+    """
+    return _cases.recent_decisions(limit=limit, since_id=since_id)
+
 
 @app.get("/auth/me")
 def whoami(user: TokenData = Depends(current_user)) -> dict:
