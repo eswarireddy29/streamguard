@@ -128,6 +128,7 @@ class LGBMModel:
     def __init__(self, config: LGBMConfig | None = None):
         self.cfg = config or LGBMConfig()
         self.model: lgb.LGBMClassifier | None = None
+        self.booster: lgb.Booster | None = None
         self.record: TrainingRecord | None = None
         self.feature_names: list[str] = []
 
@@ -204,7 +205,15 @@ class LGBMModel:
         return self
 
     def score_samples(self, X: pd.DataFrame) -> np.ndarray:
-        """Fraud probability. NOT CALIBRATED - see is_unbalance above."""
+        """Fraud probability.
+
+        Calibration depends on is_unbalance: with it True the output is
+        NOT calibrated and reads too high; Task 14.1 set it False, so
+        the tuned model's probabilities are usable as probabilities.
+        """
+        booster = getattr(self, "booster", None)
+        if booster is not None:
+            return np.asarray(booster.predict(X), dtype=float)
         if self.model is None:
             raise RuntimeError("call fit() first")
         return self.model.predict_proba(X)[:, 1]
@@ -220,15 +229,17 @@ class LGBMModel:
         'gain'  = total improvement in the objective from splits on this
                   feature. This is the meaningful one.
         'split' = how many times it was split on. A feature can be split
-                  on often while each split barely helps, so split count
-                  alone is misleading.
+                  on often while each split barely helps.
 
         NOT causal, and not the same as SHAP (Task 18). Importance says
         what the model used, not what matters in the world.
         """
-        if self.model is None:
-            raise RuntimeError("call fit() first")
-        booster = self.model.booster_
+        booster = getattr(self, "booster", None)
+        if booster is None:
+            if self.model is None:
+                raise RuntimeError("call fit() first")
+            booster = self.model.booster_
+
         vals = booster.feature_importance(importance_type=kind)
         total = vals.sum()
         return (pd.DataFrame({
@@ -256,10 +267,16 @@ class LGBMModel:
 
     @classmethod
     def load(cls, path: Path) -> "LGBMModel":
+        """Load a saved booster.
+
+        BUG FIXED (Task 15.2): the old version attached a booster to a
+        bare LGBMClassifier whose internal _n_features was never set, so
+        predict_proba() raised "Model n_features_ is -1". Reading
+        importances still worked, which is why Task 13 did not catch it.
+        A loaded model now predicts through the booster directly.
+        """
         obj = cls()
-        booster = lgb.Booster(model_file=str(path))
-        obj.model = lgb.LGBMClassifier()
-        obj.model._Booster = booster
-        obj.model.fitted_ = True
-        obj.feature_names = list(booster.feature_name())
+        obj.model = None
+        obj.booster = lgb.Booster(model_file=str(path))
+        obj.feature_names = list(obj.booster.feature_name())
         return obj

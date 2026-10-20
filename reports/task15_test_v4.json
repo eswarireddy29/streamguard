@@ -1,0 +1,161 @@
+{
+  "created_at": "2026-10-20T10:36:38",
+  "tag": "v4",
+  "block": "test",
+  "test_day_range": [
+    76,
+    89
+  ],
+  "random_pr_auc": 0.0037281610175686542,
+  "result": {
+    "model": "lightgbm_tuned",
+    "block": "test",
+    "n": 123117,
+    "n_fraud": 459,
+    "prevalence": 0.0037281610175686542,
+    "pr_auc": 0.9573386995990367,
+    "pr_auc_random": 0.0037281610175686542,
+    "lift_over_random": 256.78577054146973,
+    "roc_auc": 0.9990610483242794,
+    "k": 1400,
+    "alerts_per_day": 100,
+    "precision_at_k": 0.32,
+    "recall_at_k": 0.9760348583877996,
+    "fraud_caught_at_k": 448,
+    "accuracy_always_negative": 0.9962718389824313,
+    "per_pattern_recall_at_k": {
+      "account_takeover": 0.941747572815534,
+      "card_not_present": 1.0,
+      "card_testing": 0.9886363636363636,
+      "geo_impossible": 1.0,
+      "merchant_collusion": 0.8666666666666667
+    },
+    "per_pattern_n": {
+      "account_takeover": 103,
+      "card_not_present": 42,
+      "card_testing": 264,
+      "geo_impossible": 35,
+      "merchant_collusion": 15
+    },
+    "binary_precision": 1.0,
+    "binary_recall": 0.7777777777777778,
+    "binary_f1": 0.875,
+    "binary_flagged": 357,
+    "notes": []
+  },
+  "validation_pr_auc": 0.9524901400384305,
+  "val_minus_test": -0.004848559560606258,
+  "calibration": {
+    "n": 123117,
+    "n_positive": 459,
+    "prevalence": 0.0037281610175686542,
+    "mean_predicted": 0.0033605772029374208,
+    "brier": 0.0006347540566573278,
+    "brier_baseline": 0.0037142618329957366,
+    "ece": 0.000534884577267694,
+    "max_bucket_error": 0.00451223200964182,
+    "n_buckets_used": 10,
+    "bins": [
+      {
+        "bucket": 0,
+        "lo": 6.20888139375005e-05,
+        "hi": 6.240023062606057e-05,
+        "n": 11005,
+        "mean_predicted": 6.221866687232505e-05,
+        "actual_rate": 0.0,
+        "n_fraud": 0,
+        "error": 6.221866687232505e-05
+      },
+      {
+        "bucket": 1,
+        "lo": 6.240023062606057e-05,
+        "hi": 6.691659057686098e-05,
+        "n": 13602,
+        "mean_predicted": 6.422665256006163e-05,
+        "actual_rate": 0.0,
+        "n_fraud": 0,
+        "error": 6.422665256006163e-05
+      },
+      {
+        "bucket": 2,
+        "lo": 6.691659057686098e-05,
+        "hi": 7.301708387433578e-05,
+        "n": 11555,
+        "mean_predicted": 6.988176967340277e-05,
+        "actual_rate": 0.0,
+        "n_fraud": 0,
+        "error": 6.988176967340277e-05
+      },
+      {
+        "bucket": 3,
+        "lo": 7.301708387433578e-05,
+        "hi": 8.167696311087242e-05,
+        "n": 13085,
+        "mean_predicted": 7.735557289406e-05,
+        "actual_rate": 0.0,
+        "n_fraud": 0,
+        "error": 7.735557289406e-05
+      },
+      {
+        "bucket": 4,
+        "lo": 8.167696311087242e-05,
+        "hi": 8.81074799047685e-05,
+        "n": 12311,
+        "mean_predicted": 8.457607411247397e-05,
+        "actual_rate": 0.0,
+        "n_fraud": 0,
+        "error": 8.457607411247397e-05
+      },
+      {
+        "bucket": 5,
+        "lo": 8.81074799047685e-05,
+        "hi": 9.952318707603237e-05,
+        "n": 12299,
+        "mean_predicted": 9.322574814016072e-05,
+        "actual_rate": 0.0,
+        "n_fraud": 0,
+        "error": 9.322574814016072e-05
+      },
+      {
+        "bucket": 6,
+        "lo": 9.952318707603237e-05,
+        "hi": 0.00012076151830782711,
+        "n": 12303,
+        "mean_predicted": 0.00010920516700996415,
+        "actual_rate": 0.0,
+        "n_fraud": 0,
+        "error": 0.00010920516700996415
+      },
+      {
+        "bucket": 7,
+        "lo": 0.00012076151830782711,
+        "hi": 0.00016248738254711557,
+        "n": 12333,
+        "mean_predicted": 0.00013802363533653837,
+        "actual_rate": 0.0,
+        "n_fraud": 0,
+        "error": 0.00013802363533653837
+      },
+      {
+        "bucket": 8,
+        "lo": 0.00016248738254711557,
+        "hi": 0.00031830125642028003,
+        "n": 12312,
+        "mean_predicted": 0.00021825689820550173,
+        "actual_rate": 8.122157244964262e-05,
+        "n_fraud": 1,
+        "error": 0.00013703532575585911
+      },
+      {
+        "bucket": 9,
+        "lo": 0.00031830125642028003,
+        "hi": 0.9978174866196854,
+        "n": 12312,
+        "mean_predicted": 0.0326872481722945,
+        "actual_rate": 0.03719948018193632,
+        "n_fraud": 458,
+        "error": -0.00451223200964182
+      }
+    ]
+  }
+}
