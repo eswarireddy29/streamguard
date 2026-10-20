@@ -36,6 +36,7 @@ from streamguard.ml.splitter import PROJECT_ROOT
 from streamguard.features.computer import FeatureComputer
 from streamguard.features.state import StateStore
 from streamguard.features.graph import TransactionGraph, GRAPH_FEATURE_NAMES
+from streamguard.api.decisions import DecisionEngine, DecisionConfig
 from streamguard.utils.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -63,7 +64,14 @@ class Scorer:
         self.store = StateStore()
         self.computer = FeatureComputer(self.store)
         self.graph = TransactionGraph(ring_hops=1, ring_cap=50)
-
+        # Task 21: the decision is policy, not a model output. Rules
+        # that the model cannot learn - a stolen-card report, a
+        # regulatory value limit - are applied here, and every decision
+        # records which rule or threshold produced it.
+        self.engine = DecisionEngine(DecisionConfig(
+            threshold_block=config.threshold_block,
+            threshold_review=config.threshold_review,
+        ))
         # Which of the model's columns come from the graph, and which
         # from the per-transaction computer. The model was trained on a
         # specific ordered list; we must rebuild that exact order.
@@ -174,14 +182,8 @@ class Scorer:
                        dtype=np.float32)
 
         prob = float(self.booster.predict(row)[0])
-
-        if prob >= self.cfg.threshold_block:
-            decision = "block"
-        elif prob >= self.cfg.threshold_review:
-            decision = "review"
-        else:
-            decision = "approve"
-
+        outcome = self.engine.decide(payload, prob)
+        decision = outcome.decision.value
         reasons = []
         explained = False
         if self.explainer is not None and decision != "approve":
@@ -201,7 +203,13 @@ class Scorer:
             "top_reasons": reasons,
             "explained": explained,
             "duplicate": False,
+            "decision_source": outcome.source,
+            "rules_fired": [r.to_dict() for r in outcome.rules_fired],
+            "model_decision": outcome.model_decision.value,
+            "overridden": outcome.overridden,
+            "decision_explanation": outcome.explain(),
         }
+        
 
         if ref:
             if len(self.seen_order) == self.seen_order.maxlen:
@@ -249,4 +257,5 @@ class Scorer:
             "uptime_seconds": time.time() - self.started,
             "scored": self.scored,
             "duplicates_rejected": self.duplicates,
+            "decision_engine": self.engine.stats(),
         }

@@ -1768,6 +1768,7 @@ alembic revision --autogenerate -m "description"
 | Explainability | SHAP, additivity verified to 1e-14. Per-transaction explanations ready for the Task 26 analyst view |
 | Tracking | MLflow local file backend, ~25 runs backfilled from Tasks 12–18 |
 | API | FastAPI `/score` + `/health`. In-process p50 0.69 ms / p99 7.13 ms. Over HTTP p50 15.8 ms / p99 34.1 ms. Budget 100 ms — PASS |
+| Decisions | Policy rules + cost thresholds, most-severe-wins, full audit trail. 10/10 rule cases pass |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |

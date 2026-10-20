@@ -111,6 +111,11 @@ class ScoreResponse(BaseModel):
     top_reasons: list[Contribution] = []
     explained: bool = False
     duplicate: bool = False
+    decision_source: str = "model"
+    model_decision: str = ""
+    overridden: bool = False
+    rules_fired: list = []
+    decision_explanation: str = ""
 
 class HealthResponse(BaseModel):
     """Is the service ready to score?"""
@@ -125,3 +130,4 @@ class HealthResponse(BaseModel):
     uptime_seconds: float
     scored: int
     duplicates_rejected: int = 0
+    decision_engine: dict = {}
