@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–D complete. Tasks 19–20 complete. Starting Task 21.
+**Status:** → Phases A–D complete. Tasks 19–21 complete. Starting Task 22.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -165,8 +165,8 @@ not reopen it.**
 **PHASE E — SERVING**
 19. ✅FastAPI scoring service + request validation
 20. ✅Latency measurement (p50/p95) + tuning
-21. ⬜**← CURRENT.** Decision engine + business rules layer
-22. ⬜ Case management API (analyst queue, verdicts, audit)
+21. ✅ Decision engine + business rules layer
+22. ⬜ **← CURRENT.** Case management API (analyst queue, verdicts, audit)
 23. ⬜ JWT authentication + roles
 
 **PHASE F — FRONTEND**
@@ -1539,6 +1539,103 @@ because the server's feature state was warmed to a different point in
 the event log than the benchmark replayed from. Both times the decision
 counts gave it away, not the latency."*
 
+### Task 21 — Decision engine + business rules ✅ 20 Oct
+
+**Files:** `src/streamguard/api/decisions.py`,
+`scripts/test_decisions.py`, edits to `scorer.py` and `schemas.py`
+
+**Why this is not just a threshold.** A score answers *"how likely is
+this fraud?"*. A decision answers *"what do we do?"*, and that question
+has inputs the model does not have:
+
+- a card **reported stolen** must be blocked at any score — the model
+  has never seen the theft report, only behaviour
+- a **regulatory value limit** requires review regardless of risk
+- a **merchant under investigation** needs every transaction held
+- **analyst capacity is finite**, so the review queue has a budget
+
+Putting these in the model would be wrong: they are policy, they change
+weekly, and they must be auditable one rule at a time. Putting them in
+the scorer would mix a measurement with a business decision.
+
+**Precedence.** All rules are evaluated, not just the first match, so
+the audit trail records everything that applied. **The most severe
+outcome wins.** A rule can only make a decision MORE severe — except
+`card_trusted`, which is explicitly bounded by an amount and cannot
+override a block.
+
+**Every decision records why.** The response carries `decision_source`
+("rule" or "model"), `model_decision` (what the score alone said),
+`overridden`, the full `rules_fired` list, and a plain-English
+`decision_explanation`. An analyst asked *"why was this blocked?"* gets
+an answer that names the rule or the score.
+
+#### The rules
+
+| rule | outcome | why the model cannot do it |
+|---|---|---|
+| `card_blocked` | BLOCK | theft report is outside the transaction stream |
+| `merchant_blocked` | BLOCK | operations decision |
+| `device_blocked` | BLOCK | operations decision |
+| `very_high_value` ≥ ₹1,000,000 | BLOCK | one wrong block costs less than one fraudulent approval at this size |
+| `high_value` ≥ ₹200,000 | REVIEW | reporting obligation; a low score does not remove it |
+| `merchant_watched` | REVIEW | investigation status |
+| `card_trusted` < ₹100,000 | APPROVE | the only severity-reducing rule, and bounded |
+
+Thresholds come from Task 16, not from 0.5: block ≥ 0.03061, review ≥
+0.01113, derived from the 25:1 cost asymmetry.
+
+#### Verified — 10/10 cases pass
+
+| case | expected | source |
+|---|---|---|
+| low score, nothing special | approve | model |
+| score above review threshold | review | model |
+| score above block threshold | block | model |
+| **stolen card, p = 0.0001** | **block** | **rule** |
+| watched merchant, low score | review | rule |
+| high value, low score | review | rule |
+| very high value, low score | block | rule |
+| trusted card, mid score | approve | rule |
+| **trusted card CANNOT bypass a block score** | **block** | **model** |
+| **trusted card CANNOT bypass a high value** | **review** | **rule** |
+
+The last two matter most: **trust is not a licence to skip a strong
+fraud signal or a regulatory limit.** A bypass rule without bounds is
+how a whitelist becomes an attack surface.
+
+**Example explanations an analyst reads:**
+
+> BLOCK by rule 'card_blocked' (card is on the blocked list (reported
+> stolen or compromised)), overriding the model's approve at p=0.0001
+
+> REVIEW by rule 'high_value' (amount 250,000 requires review above
+> 200,000), overriding the model's approve at p=0.0010
+
+#### Verified live over HTTP
+
+| request | decision | source | rules fired |
+|---|---|---|---|
+| ₹94,500 Dubai, 3am, manual entry | block | model | none |
+| ₹250,000 same transaction | block | model | `high_value` (wanted review) |
+
+The second shows precedence working: the rule asked for review, the
+model said block at p=0.9724, and block won. The explanation names
+both — *"rule 'high_value' ... and the model agree"*.
+
+**Interview talking point**
+
+*"The model produces a score; the decision engine produces a decision,
+and they are deliberately separate. A card reported stolen this morning
+must be blocked even though the model scores it at 0.0001 — the model
+has never seen the theft report, only behaviour. I evaluate every rule
+rather than stopping at the first match, because the audit trail should
+record everything that applied, and the most severe outcome wins. The
+one rule that can reduce severity, a trusted card, is bounded by amount
+and cannot override a block score or a regulatory limit — I have
+explicit test cases for both, because an unbounded whitelist is an
+attack surface."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -1753,7 +1850,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-**20 of 32 tasks complete.**
+## WHERE I AM RIGHT NOW → **21 of 32 tasks complete.**
 
 ### What exists and works right now
 
