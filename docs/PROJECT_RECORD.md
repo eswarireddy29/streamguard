@@ -509,6 +509,91 @@ half the argument for ML.**
 
 **precision@k ceiling:** only 507 frauds exist in the block, so
 precision@1300 cannot exceed 507/1300 = 0.3900.
+### Task 12 — what comes next
+**Verified numbers (19 Oct)**
+
+| block | days | rows | fraud | prevalence |
+|---|---|---|---|---|
+| train | 0–62  | 552,521 | 2,129 | 0.385% |
+| val   | 63–75 | 115,491 |   432 | 0.374% |
+| test  | 76–89 | 123,100 |   442 | 0.359% |
+| total |       | 791,112 | 3,003 |        |
+
+57 columns = 49 features + 8 metadata. Rows and fraud sum exactly.
+
+**Baselines on VALIDATION** (k = 1,300 = 100 analyst reviews × 13 days;
+random PR-AUC = 0.0037):
+
+| model | PR-AUC | lift | ROC-AUC | prec@k | recall@k |
+|---|---|---|---|---|---|
+| always_negative | 0.0037 | 1.0× | 0.5000 | n/a | n/a |
+| rules | 0.0146 | 3.9× | 0.5565 | 0.0408 | 0.1227 |
+| logistic_regression | 0.9299 | 248.6× | 0.9981 | 0.3231 | 0.9722 |
+
+`always_negative`'s prec@k and recall@k are **degenerate** — every score is
+identical, so argsort returns rows in chronological order, which happened
+to contain 3 frauds (chance would give ~4.8). Quote them as n/a. Its
+PR-AUC equals prevalence and ROC-AUC is exactly 0.5000, the textbook
+values for a model with no information.
+
+`rules` caught ~53 of 432 frauds. Expected: `txn_count_5m` averages 1.841
+for card_testing, so a `>5` threshold fires only on the tail of those
+bursts; the speed rule can reach at most geo_impossible (25 in this
+block); and no rule targets account_takeover at all. **One fraud in eight
+is what pre-ML rule systems achieve here — half the argument for ML.**
+
+**Why precision@1300 cannot exceed 0.332:** only 432 frauds exist in the
+block. The logistic model's 0.3231 is 97% of that ceiling.
+
+---
+
+#### Task 12.5b — leakage diagnostic (`scripts/diagnose_baseline.py`)
+
+A linear model scoring 0.93 on fraud detection demanded investigation
+before being written down. Three checks:
+
+**1. Perfect separators: NONE.** No feature's fraud and normal value
+ranges fail to overlap. A leaked label would almost certainly show here.
+
+**2. Ablation decays gracefully, it does not collapse.** Leakage looks
+like a cliff — remove the leaked column, score falls to near-random.
+
+| features | PR-AUC | last dropped |
+|---|---|---|
+| 49 | 0.9299 | — |
+| 46 | 0.8894 | distance_from_home_km, distance_from_prev_km, implied_speed_kmh |
+| 43 | 0.8798 | distinct_merchants_1h, txn_count_1h, distinct_mccs_1h |
+| 40 | 0.8022 | txn_count_5m, is_new_city, merchant_amount_zscore |
+| 37 | 0.7585 | txn_count_24h, distinct_cities_24h, is_manual_entry |
+
+With the twelve strongest features gone it still scores 0.7585 = **205×
+random**. The signal is distributed, not carried by a giveaway.
+
+**3. Strongest single features (validation, no model fitted):**
+
+| feature | PR-AUC alone | direction |
+|---|---|---|
+| distance_from_home_km | 0.5476 | low=fraud |
+| distance_from_prev_km | 0.4863 | low=fraud |
+| implied_speed_kmh | 0.4862 | low=fraud |
+| distinct_merchants_1h | 0.4028 | high=fraud |
+| txn_count_1h | 0.4019 | high=fraud |
+| distinct_mccs_1h | 0.3806 | high=fraud |
+| txn_count_5m | 0.3517 | high=fraud |
+
+Seven features each at 95–150× random. A linear combination reaching
+0.93 is unremarkable. **Conclusion: not leakage.** The generator produces
+fraud that is genuinely separable with the features built for it — which
+it should, since the features were designed knowing the patterns. That is
+the honest statement, and it belongs in the README.
+
+**A hypothesis that was tested and killed:** `is_manual_entry` was
+predicted to be a perfect separator, since Task 10 recorded 1.000 fraud
+vs 0.000 normal. It ranks 12th at 0.1190. Task 10's figure was *within
+the card_not_present pattern*, which is 50 of 432 frauds. A feature that
+perfectly flags 11% of fraud is a weak overall ranker.
+
+---
 
 ### Task 13 — LightGBM ✅ 19 Oct
 
@@ -790,6 +875,100 @@ selection rule breaks ties toward the smaller gap, so the winner scored
 0.0013 lower on validation than the top trial but should generalise
 better to the test set I have not touched."*
 
+### Task 15 — Evaluation + calibration ✅ 20 Oct
+
+**Files:** `src/streamguard/ml/calibration.py`,
+`scripts/check_calibration.py`, `scripts/evaluate_test.py`
+
+#### THE HEADLINE NUMBER
+
+**Test PR-AUC 0.9573** on days 77–90 (123,117 rows, 459 fraud, 0.373%
+prevalence). Lift over random: **256.8×**. precision@1400 0.3200 (448
+of 459 frauds in the top 1,400), recall@1400 0.9760. At threshold 0.5:
+357 flagged, **precision 1.0000**, recall 0.7778.
+
+`data/processed/test_set_access.log` contains **exactly one line.** The
+test set was opened once, after every decision was final.
+
+| | validation | test |
+|---|---|---|
+| PR-AUC | 0.9525 | **0.9573** |
+| difference | | **−0.0048** |
+
+The two agree within 0.005. **Tuning on validation did not inflate the
+estimate** — that is what the sealed test set was for.
+
+**Per-pattern recall on test:**
+
+| pattern | recall | n |
+|---|---|---|
+| card_not_present | 100.0% | 42 |
+| geo_impossible | 100.0% | 35 |
+| card_testing | 98.9% | 264 |
+| account_takeover | 94.2% | 103 |
+| merchant_collusion | 86.7% | 15 |
+
+*merchant_collusion n=15, so one miss is 6.7 points. Read as direction.*
+
+#### 15.2 — Why calibration matters, and the result
+
+Ranking metrics (PR-AUC, precision@k) only care about ORDER. Task 16
+computes thresholds from the probability VALUES:
+`P(fraud) × ₹5,000` vs `(1 − P(fraud)) × ₹200`. Wrong probabilities
+mean a wrong threshold even when the ranking is perfect.
+
+Buckets are **quantile**, not equal-width: at 0.37% prevalence,
+equal-width buckets would put 99% of rows in the first one.
+
+**Calibration on TEST:**
+
+| metric | value |
+|---|---|
+| mean predicted | 0.00336 |
+| actual rate | 0.00373 |
+| bias | −0.00037 |
+| Brier | 0.000635 |
+| Brier baseline | 0.003714 |
+| improvement | 82.9% |
+| ECE | 0.00053 |
+| worst bucket | 0.00451 |
+
+**Probabilities are usable as probabilities.** Task 16 computes cost
+thresholds directly, with no isotonic or Platt step. This is the payoff
+from Task 14.1's `is_unbalance=False` decision.
+
+**The reliability table is also the clearest evidence of generator
+separability:** buckets 0–8 hold 110,805 rows and **one** fraud between
+them. All 458 remaining frauds are in bucket 9. Real fraud does not
+separate like that.
+
+#### Bug found and fixed — `LGBMModel.load()`
+
+`load()` attached a booster to a bare `LGBMClassifier` whose internal
+`_n_features` was never set, so `predict_proba()` raised *"Model
+n_features_ is -1"*. Written at Task 13 and not caught, because
+`inspect_model.py` only reads feature importances and never predicts.
+**Any code path that loads a saved model and scores with it was
+broken** — which Phase E's FastAPI service would have hit immediately.
+Fixed by predicting through the booster directly.
+
+**Interview talking point**
+
+*"I kept days 77–90 sealed from Task 12 onward. `load_test()` required
+a written reason and logged every access, so I can prove the test set
+was opened once, after the model was final. Validation said 0.9525,
+test said 0.9573 — a gap of 0.005, which tells me the hyperparameter
+tuning generalised rather than fitting the validation window. The
+calibration check also earned its place: ECE 0.0005 means I can compute
+cost-based thresholds straight from the probabilities instead of
+calibrating first."*
+
+**HONESTY NOTE.** 0.9573 describes the generator. The reliability table
+makes the point: 110,805 test rows below bucket 9 contain one fraud
+between them. Real card fraud is not that separable. Three generator
+label proxies were found and fixed at Task 13.7; there may be more this
+audit does not detect.
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -1004,7 +1183,8 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-**13 of 32 tasks complete.**
+**15 of 32 tasks complete.**
+
 ### What exists and works right now
 
 | | |
@@ -1015,92 +1195,9 @@ alembic revision --autogenerate -m "description"
 | Stream processor | ~6,700 events/s, 0 errors, resumption across processes verified |
 | Features | 49 features, `data/processed/features.parquet`, 140 MB, 0 NaN/inf |
 |44 passing — leakage, integrity, split, generator; add rows: Data | 791,109 transactions, 3,000 fraud (0.379%) and Model | LightGBM, val PR-AUC 0.9201 (random 0.0044)
+| Model | LightGBM tuned, **test PR-AUC 0.9573**, val 0.9525, calibrated (ECE 0.0005) |
 
-### Task 12 — what comes next
-**Verified numbers (19 Oct)**
 
-| block | days | rows | fraud | prevalence |
-|---|---|---|---|---|
-| train | 0–62  | 552,521 | 2,129 | 0.385% |
-| val   | 63–75 | 115,491 |   432 | 0.374% |
-| test  | 76–89 | 123,100 |   442 | 0.359% |
-| total |       | 791,112 | 3,003 |        |
-
-57 columns = 49 features + 8 metadata. Rows and fraud sum exactly.
-
-**Baselines on VALIDATION** (k = 1,300 = 100 analyst reviews × 13 days;
-random PR-AUC = 0.0037):
-
-| model | PR-AUC | lift | ROC-AUC | prec@k | recall@k |
-|---|---|---|---|---|---|
-| always_negative | 0.0037 | 1.0× | 0.5000 | n/a | n/a |
-| rules | 0.0146 | 3.9× | 0.5565 | 0.0408 | 0.1227 |
-| logistic_regression | 0.9299 | 248.6× | 0.9981 | 0.3231 | 0.9722 |
-
-`always_negative`'s prec@k and recall@k are **degenerate** — every score is
-identical, so argsort returns rows in chronological order, which happened
-to contain 3 frauds (chance would give ~4.8). Quote them as n/a. Its
-PR-AUC equals prevalence and ROC-AUC is exactly 0.5000, the textbook
-values for a model with no information.
-
-`rules` caught ~53 of 432 frauds. Expected: `txn_count_5m` averages 1.841
-for card_testing, so a `>5` threshold fires only on the tail of those
-bursts; the speed rule can reach at most geo_impossible (25 in this
-block); and no rule targets account_takeover at all. **One fraud in eight
-is what pre-ML rule systems achieve here — half the argument for ML.**
-
-**Why precision@1300 cannot exceed 0.332:** only 432 frauds exist in the
-block. The logistic model's 0.3231 is 97% of that ceiling.
-
----
-
-#### Task 12.5b — leakage diagnostic (`scripts/diagnose_baseline.py`)
-
-A linear model scoring 0.93 on fraud detection demanded investigation
-before being written down. Three checks:
-
-**1. Perfect separators: NONE.** No feature's fraud and normal value
-ranges fail to overlap. A leaked label would almost certainly show here.
-
-**2. Ablation decays gracefully, it does not collapse.** Leakage looks
-like a cliff — remove the leaked column, score falls to near-random.
-
-| features | PR-AUC | last dropped |
-|---|---|---|
-| 49 | 0.9299 | — |
-| 46 | 0.8894 | distance_from_home_km, distance_from_prev_km, implied_speed_kmh |
-| 43 | 0.8798 | distinct_merchants_1h, txn_count_1h, distinct_mccs_1h |
-| 40 | 0.8022 | txn_count_5m, is_new_city, merchant_amount_zscore |
-| 37 | 0.7585 | txn_count_24h, distinct_cities_24h, is_manual_entry |
-
-With the twelve strongest features gone it still scores 0.7585 = **205×
-random**. The signal is distributed, not carried by a giveaway.
-
-**3. Strongest single features (validation, no model fitted):**
-
-| feature | PR-AUC alone | direction |
-|---|---|---|
-| distance_from_home_km | 0.5476 | low=fraud |
-| distance_from_prev_km | 0.4863 | low=fraud |
-| implied_speed_kmh | 0.4862 | low=fraud |
-| distinct_merchants_1h | 0.4028 | high=fraud |
-| txn_count_1h | 0.4019 | high=fraud |
-| distinct_mccs_1h | 0.3806 | high=fraud |
-| txn_count_5m | 0.3517 | high=fraud |
-
-Seven features each at 95–150× random. A linear combination reaching
-0.93 is unremarkable. **Conclusion: not leakage.** The generator produces
-fraud that is genuinely separable with the features built for it — which
-it should, since the features were designed knowing the patterns. That is
-the honest statement, and it belongs in the README.
-
-**A hypothesis that was tested and killed:** `is_manual_entry` was
-predicted to be a perfect separator, since Task 10 recorded 1.000 fraud
-vs 0.000 normal. It ranks 12th at 0.1190. Task 10's figure was *within
-the card_not_present pattern*, which is 50 of 432 frauds. A feature that
-perfectly flags 11% of fraud is a weak overall ranker.
-
----
 
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
@@ -1220,10 +1317,9 @@ judged by — it flatters imbalanced data.
 - **32:** README, diagrams, GitHub, screenshots, report, slides, interview Q&A
 
 ### Open items carried forward
-- ~~Account takeover features weak~~ **CLOSED** — 83.9% recall with trees
-  vs 52.3% linear. No targeted features needed.
-- ~~Collusion shortcut (`merchant_txn_count`)~~ **LOW RISK** — rank 16,
-  0.26% of gain. Confirm with SHAP at Task 18.
+- - ~~Probabilities calibrated?~~ **CONFIRMED at Task 15** — ECE 0.00053
+  on test. Task 16 uses them directly.
+- **Test set is used.** One access, logged. Do not tune against it.
 - **Overfitting gap 0.0799** — train hits PR-AUC 1.0 by iteration 400.
   Task 14: lower `num_leaves`, raise `min_child_samples`.
 - **merchant_collusion distance** mean 258 km vs median 20.5 km — the
@@ -1232,6 +1328,7 @@ judged by — it flatters imbalanced data.
 - **psycopg ResourceWarning** — still open, fix before Phase E.
 - **README must state** that 0.9201 describes the generator, not the
   real world, and that three label proxies were found and fixed.
+
 
 ### Three bugs already found — all of them silent
 

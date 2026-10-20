@@ -1,0 +1,95 @@
+{
+  "created_at": "2026-10-20T10:50:31",
+  "tag": "v4",
+  "costs": {
+    "false_negative": 5000.0,
+    "false_positive": 200.0,
+    "review": 50.0,
+    "ratio": 25.0
+  },
+  "theoretical_threshold": 0.038461538461538464,
+  "chosen_on": "validation",
+  "optimum": {
+    "threshold": 0.030612244897959186,
+    "tp": 482,
+    "fp": 264,
+    "tn": 114795,
+    "fn": 25,
+    "precision": 0.646112600536193,
+    "recall": 0.9506903353057199,
+    "total_cost": 177800.0,
+    "cost_per_1000": 1538.5147880864615,
+    "flagged": 746,
+    "flag_rate": 0.006455185781285153
+  },
+  "default_0.5": {
+    "threshold": 0.5,
+    "tp": 392,
+    "fp": 0,
+    "tn": 115059,
+    "fn": 115,
+    "precision": 1.0,
+    "recall": 0.7731755424063116,
+    "total_cost": 575000.0,
+    "cost_per_1000": 4975.511828738557,
+    "flagged": 392,
+    "flag_rate": 0.0033920011075921986
+  },
+  "theoretical": {
+    "threshold": 0.038461538461538464,
+    "tp": 478,
+    "fp": 202,
+    "tn": 114857,
+    "fn": 29,
+    "precision": 0.7029411764705882,
+    "recall": 0.9428007889546351,
+    "total_cost": 185400.0,
+    "cost_per_1000": 1604.2780748663101,
+    "flagged": 680,
+    "flag_rate": 0.005884083553986467
+  },
+  "three_way": {
+    "block_threshold": 0.030612244897959186,
+    "review_threshold": 0.011131136650203197,
+    "n_approved": 114266,
+    "n_review": 554,
+    "n_blocked": 746,
+    "review_rate": 0.004793797483688974,
+    "fraud_missed": 16,
+    "fraud_in_review": 9,
+    "fraud_blocked": 482,
+    "legit_blocked": 264,
+    "total_cost": 160500.0,
+    "cost_per_1000": 1388.8167800218057,
+    "reviews_per_day": 554
+  },
+  "test": {
+    "at_chosen_threshold": {
+      "threshold": 0.030612244897959186,
+      "tp": 436,
+      "fp": 253,
+      "tn": 122405,
+      "fn": 23,
+      "precision": 0.6328011611030478,
+      "recall": 0.9498910675381264,
+      "total_cost": 165600.0,
+      "cost_per_1000": 1345.062014181632,
+      "flagged": 689,
+      "flag_rate": 0.0055963027039320325
+    },
+    "at_default": {
+      "threshold": 0.5,
+      "tp": 357,
+      "fp": 0,
+      "tn": 122658,
+      "fn": 102,
+      "precision": 1.0,
+      "recall": 0.7777777777777778,
+      "total_cost": 510000.0,
+      "cost_per_1000": 4142.401130631838,
+      "flagged": 357,
+      "flag_rate": 0.0028996807914422867
+    },
+    "saving": 344400.0
+  }
+}
