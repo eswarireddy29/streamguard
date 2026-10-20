@@ -1,0 +1,659 @@
+{
+  "created_at": "2026-10-20T12:38:35",
+  "tag": "v6",
+  "additivity": {
+    "n_checked": 100,
+    "max_difference": 1.0658141036401503e-14,
+    "mean_difference": 3.9968028886505635e-15,
+    "passes": true,
+    "tolerance": 0.001
+  },
+  "global_importance": [
+    {
+      "feature": "distance_from_home_km",
+      "mean_abs_shap": 0.3927846535480781,
+      "pct": 14.08457462318878,
+      "gain_rank": 3,
+      "shap_rank": 1,
+      "moved": 2
+    },
+    {
+      "feature": "amount",
+      "mean_abs_shap": 0.24350532422343926,
+      "pct": 8.73167747056341,
+      "gain_rank": 7,
+      "shap_rank": 2,
+      "moved": 5
+    },
+    {
+      "feature": "merchant_is_online",
+      "mean_abs_shap": 0.22734369475330235,
+      "pct": 8.152149542859872,
+      "gain_rank": 6,
+      "shap_rank": 3,
+      "moved": 3
+    },
+    {
+      "feature": "merchant_amount_std",
+      "mean_abs_shap": 0.17242121980398095,
+      "pct": 6.182725101435642,
+      "gain_rank": 8,
+      "shap_rank": 4,
+      "moved": 4
+    },
+    {
+      "feature": "device_card_count_7d",
+      "mean_abs_shap": 0.1331064282829845,
+      "pct": 4.772965045968491,
+      "gain_rank": 9,
+      "shap_rank": 5,
+      "moved": 4
+    },
+    {
+      "feature": "hour_of_day",
+      "mean_abs_shap": 0.1233214467303778,
+      "pct": 4.422092623588208,
+      "gain_rank": 17,
+      "shap_rank": 6,
+      "moved": 11
+    },
+    {
+      "feature": "is_new_mcc",
+      "mean_abs_shap": 0.09949209156715469,
+      "pct": 3.5676133867159785,
+      "gain_rank": 35,
+      "shap_rank": 7,
+      "moved": 28
+    },
+    {
+      "feature": "card_merchant_count_7d",
+      "mean_abs_shap": 0.0976420208019559,
+      "pct": 3.50127306635152,
+      "gain_rank": 25,
+      "shap_rank": 8,
+      "moved": 17
+    },
+    {
+      "feature": "merchant_txn_count",
+      "mean_abs_shap": 0.09727635441098786,
+      "pct": 3.4881609054657563,
+      "gain_rank": 31,
+      "shap_rank": 9,
+      "moved": 22
+    },
+    {
+      "feature": "seconds_since_prev",
+      "mean_abs_shap": 0.09250436081830665,
+      "pct": 3.3170455137355384,
+      "gain_rank": 21,
+      "shap_rank": 10,
+      "moved": 11
+    },
+    {
+      "feature": "amount_vs_merchant_mean",
+      "mean_abs_shap": 0.08677286125060803,
+      "pct": 3.1115239063233884,
+      "gain_rank": 19,
+      "shap_rank": 11,
+      "moved": 8
+    },
+    {
+      "feature": "txn_count_24h",
+      "mean_abs_shap": 0.08513212812071362,
+      "pct": 3.052690069522513,
+      "gain_rank": 12,
+      "shap_rank": 12,
+      "moved": 0
+    },
+    {
+      "feature": "merchant_distinct_cards",
+      "mean_abs_shap": 0.07901343454653223,
+      "pct": 2.8332843583687937,
+      "gain_rank": 29,
+      "shap_rank": 13,
+      "moved": 16
+    },
+    {
+      "feature": "implied_speed_kmh",
+      "mean_abs_shap": 0.06590034554385535,
+      "pct": 2.3630717904123633,
+      "gain_rank": 16,
+      "shap_rank": 14,
+      "moved": 2
+    },
+    {
+      "feature": "merchant_card_count_7d",
+      "mean_abs_shap": 0.05930698553844517,
+      "pct": 2.1266453664803473,
+      "gain_rank": 14,
+      "shap_rank": 15,
+      "moved": -1
+    },
+    {
+      "feature": "merchant_novelty_rate",
+      "mean_abs_shap": 0.05800089955197194,
+      "pct": 2.079811394290719,
+      "gain_rank": 30,
+      "shap_rank": 16,
+      "moved": 14
+    },
+    {
+      "feature": "merchant_amount_mean",
+      "mean_abs_shap": 0.05464409289424191,
+      "pct": 1.9594421450358512,
+      "gain_rank": 11,
+      "shap_rank": 17,
+      "moved": -6
+    },
+    {
+      "feature": "device_card_count",
+      "mean_abs_shap": 0.05322217819650778,
+      "pct": 1.9084547566866934,
+      "gain_rank": 10,
+      "shap_rank": 18,
+      "moved": -8
+    },
+    {
+      "feature": "txn_count_5m",
+      "mean_abs_shap": 0.052871255472515574,
+      "pct": 1.895871278059426,
+      "gain_rank": 4,
+      "shap_rank": 19,
+      "moved": -15
+    },
+    {
+      "feature": "card_distinct_merchants",
+      "mean_abs_shap": 0.046506544348024745,
+      "pct": 1.6676438053764635,
+      "gain_rank": 26,
+      "shap_rank": 20,
+      "moved": 6
+    },
+    {
+      "feature": "day_of_week",
+      "mean_abs_shap": 0.04452767989558832,
+      "pct": 1.5966851673600604,
+      "gain_rank": 27,
+      "shap_rank": 21,
+      "moved": 6
+    },
+    {
+      "feature": "merchant_amount_zscore",
+      "mean_abs_shap": 0.04190089696131997,
+      "pct": 1.502493299316283,
+      "gain_rank": 22,
+      "shap_rank": 22,
+      "moved": 0
+    },
+    {
+      "feature": "amount_ratio_card_ema",
+      "mean_abs_shap": 0.040871723823890545,
+      "pct": 1.4655889403415459,
+      "gain_rank": 24,
+      "shap_rank": 23,
+      "moved": 1
+    },
+    {
+      "feature": "amount_sum_24h",
+      "mean_abs_shap": 0.03915077156438989,
+      "pct": 1.403878585054166,
+      "gain_rank": 18,
+      "shap_rank": 24,
+      "moved": -6
+    },
+    {
+      "feature": "is_new_device",
+      "mean_abs_shap": 0.03773108121547758,
+      "pct": 1.352970957985613,
+      "gain_rank": 23,
+      "shap_rank": 25,
+      "moved": -2
+    },
+    {
+      "feature": "distance_from_prev_km",
+      "mean_abs_shap": 0.03443094475243982,
+      "pct": 1.2346338033628645,
+      "gain_rank": 5,
+      "shap_rank": 26,
+      "moved": -21
+    },
+    {
+      "feature": "card_device_count",
+      "mean_abs_shap": 0.027596934966860494,
+      "pct": 0.9895780968042769,
+      "gain_rank": 28,
+      "shap_rank": 27,
+      "moved": 1
+    },
+    {
+      "feature": "amount_ratio_card_max",
+      "mean_abs_shap": 0.021424139626825957,
+      "pct": 0.7682323904101076,
+      "gain_rank": 32,
+      "shap_rank": 28,
+      "moved": 4
+    },
+    {
+      "feature": "is_ecommerce",
+      "mean_abs_shap": 0.02119529615709781,
+      "pct": 0.7600264615447605,
+      "gain_rank": 15,
+      "shap_rank": 29,
+      "moved": -14
+    },
+    {
+      "feature": "amount_zscore_card",
+      "mean_abs_shap": 0.019619832054523573,
+      "pct": 0.7035330585606597,
+      "gain_rank": 36,
+      "shap_rank": 30,
+      "moved": 6
+    },
+    {
+      "feature": "card_distinct_mccs",
+      "mean_abs_shap": 0.01952527170601147,
+      "pct": 0.70014228890359,
+      "gain_rank": 37,
+      "shap_rank": 31,
+      "moved": 6
+    },
+    {
+      "feature": "amount_ratio_card_mean",
+      "mean_abs_shap": 0.019473973354605056,
+      "pct": 0.6983028192300588,
+      "gain_rank": 34,
+      "shap_rank": 32,
+      "moved": 2
+    },
+    {
+      "feature": "is_new_merchant",
+      "mean_abs_shap": 0.019271075415150187,
+      "pct": 0.691027251960999,
+      "gain_rank": 33,
+      "shap_rank": 33,
+      "moved": 0
+    },
+    {
+      "feature": "amount_zscore_customer",
+      "mean_abs_shap": 0.01469751898065625,
+      "pct": 0.5270274716408897,
+      "gain_rank": 39,
+      "shap_rank": 34,
+      "moved": 5
+    },
+    {
+      "feature": "card_txn_count",
+      "mean_abs_shap": 0.014104047465772138,
+      "pct": 0.5057466151649148,
+      "gain_rank": 38,
+      "shap_rank": 35,
+      "moved": 3
+    },
+    {
+      "feature": "merchant_card_velocity_1h",
+      "mean_abs_shap": 0.013496345965037765,
+      "pct": 0.4839554961423143,
+      "gain_rank": 42,
+      "shap_rank": 36,
+      "moved": 6
+    },
+    {
+      "feature": "amount_sum_1h",
+      "mean_abs_shap": 0.01215508650816773,
+      "pct": 0.4358602644709697,
+      "gain_rank": 13,
+      "shap_rank": 37,
+      "moved": -24
+    },
+    {
+      "feature": "distinct_merchants_1h",
+      "mean_abs_shap": 0.008371555071688594,
+      "pct": 0.3001894067251279,
+      "gain_rank": 1,
+      "shap_rank": 38,
+      "moved": -37
+    },
+    {
+      "feature": "is_manual_entry",
+      "mean_abs_shap": 0.00677511183380757,
+      "pct": 0.24294372843167056,
+      "gain_rank": 2,
+      "shap_rank": 39,
+      "moved": -37
+    },
+    {
+      "feature": "is_night",
+      "mean_abs_shap": 0.005149910602841173,
+      "pct": 0.18466683851636068,
+      "gain_rank": 43,
+      "shap_rank": 40,
+      "moved": 3
+    },
+    {
+      "feature": "distinct_cities_24h",
+      "mean_abs_shap": 0.003328677132590815,
+      "pct": 0.11936057340065795,
+      "gain_rank": 20,
+      "shap_rank": 41,
+      "moved": -21
+    },
+    {
+      "feature": "device_card_velocity_1h",
+      "mean_abs_shap": 0.0012176561068889665,
+      "pct": 0.04366303048741681,
+      "gain_rank": 47,
+      "shap_rank": 42,
+      "moved": 5
+    },
+    {
+      "feature": "device_shared",
+      "mean_abs_shap": 0.0007790719377857273,
+      "pct": 0.02793616488183962,
+      "gain_rank": 45,
+      "shap_rank": 43,
+      "moved": 2
+    },
+    {
+      "feature": "velocity_ratio_5m_24h",
+      "mean_abs_shap": 0.0004610515329980919,
+      "pct": 0.01653250620407031,
+      "gain_rank": 46,
+      "shap_rank": 44,
+      "moved": 2
+    },
+    {
+      "feature": "txn_count_1h",
+      "mean_abs_shap": 0.00034469598562710365,
+      "pct": 0.012360198617801377,
+      "gain_rank": 40,
+      "shap_rank": 45,
+      "moved": -5
+    },
+    {
+      "feature": "is_card_present",
+      "mean_abs_shap": 0.0002035655672772323,
+      "pct": 0.007299507241763935,
+      "gain_rank": 44,
+      "shap_rank": 46,
+      "moved": -2
+    },
+    {
+      "feature": "is_new_city",
+      "mean_abs_shap": 0.0001854224556429403,
+      "pct": 0.006648926809453965,
+      "gain_rank": 41,
+      "shap_rank": 47,
+      "moved": -6
+    },
+    {
+      "feature": "amount_log",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 48,
+      "moved": 5
+    },
+    {
+      "feature": "is_first_transaction",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 49,
+      "moved": 4
+    },
+    {
+      "feature": "is_new_country",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 50,
+      "moved": 3
+    },
+    {
+      "feature": "distinct_mccs_1h",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 51,
+      "moved": 2
+    },
+    {
+      "feature": "distinct_countries_24h",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 52,
+      "moved": 1
+    },
+    {
+      "feature": "is_foreign_country",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 53,
+      "moved": 0
+    },
+    {
+      "feature": "txn_count_1m",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 54,
+      "moved": -1
+    },
+    {
+      "feature": "device_new_card",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 55,
+      "moved": -2
+    },
+    {
+      "feature": "merchant_new_card",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 56,
+      "moved": -3
+    },
+    {
+      "feature": "is_weekend",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 57,
+      "moved": -4
+    },
+    {
+      "feature": "is_speed_implausible",
+      "mean_abs_shap": 0.0,
+      "pct": 0.0,
+      "gain_rank": 53,
+      "shap_rank": 58,
+      "moved": -5
+    }
+  ],
+  "examples": [
+    {
+      "pattern": "account_takeover",
+      "prediction": 0.9973077339908261,
+      "base_value": -10.116544741672664,
+      "top_positive": [
+        [
+          "distance_from_home_km",
+          14.53964614868164,
+          5.755791440876679
+        ],
+        [
+          "distinct_cities_24h",
+          2.0,
+          1.487122222301437
+        ],
+        [
+          "txn_count_24h",
+          8.0,
+          1.4603884031035859
+        ],
+        [
+          "merchant_amount_std",
+          6612.56982421875,
+          1.3650668305248796
+        ],
+        [
+          "device_card_count_7d",
+          2.0,
+          0.9824280256564546
+        ]
+      ],
+      "top_negative": [
+        [
+          "day_of_week",
+          5.0,
+          -0.09883974966810528
+        ],
+        [
+          "is_new_mcc",
+          0.0,
+          -0.04052947575895915
+        ],
+        [
+          "is_ecommerce",
+          1.0,
+          -0.03290303647667938
+        ],
+        [
+          "hour_of_day",
+          12.0,
+          -0.013673927587592902
+        ],
+        [
+          "merchant_card_velocity_1h",
+          3.0,
+          -0.011561511647446957
+        ]
+      ],
+      "total_shap": 16.03122090237833
+    },
+    {
+      "pattern": "card_not_present",
+      "prediction": 0.9975721942115828,
+      "base_value": -10.116544741672664,
+      "top_positive": [
+        [
+          "is_manual_entry",
+          1.0,
+          12.553891319237662
+        ],
+        [
+          "is_new_device",
+          1.0,
+          1.0813326239797199
+        ],
+        [
+          "amount",
+          9200.3896484375,
+          0.4788618828755599
+        ],
+        [
+          "card_distinct_merchants",
+          64.0,
+          0.44630167631947515
+        ],
+        [
+          "merchant_amount_std",
+          6085.1318359375,
+          0.30924320835344393
+        ]
+      ],
+      "top_negative": [
+        [
+          "distance_from_home_km",
+          0.8597849607467651,
+          -0.09640109603981317
+        ],
+        [
+          "merchant_novelty_rate",
+          0.6666666865348816,
+          -0.08529110964288698
+        ],
+        [
+          "is_new_mcc",
+          0.0,
+          -0.032256869603612785
+        ],
+        [
+          "seconds_since_prev",
+          25839.0,
+          -0.03060392971806279
+        ],
+        [
+          "merchant_card_velocity_1h",
+          3.0,
+          -0.024364784439169167
+        ]
+      ],
+      "total_shap": 16.134881381265256
+    },
+    {
+      "pattern": "card_testing",
+      "prediction": 0.9998472009410794,
+      "base_value": -10.116544741672664,
+      "top_positive": [
+        [
+          "distinct_merchants_1h",
+          3.0,
+          3.76926101121361
+        ],
+        [
+          "amount",
+          35.959999084472656,
+          3.026930723388395
+        ],
+        [
+          "txn_count_5m",
+          3.0,
+          2.706048689213811
+        ],
+        [
+          "distance_from_prev_km",
+          0.0,
+          2.647655120696461
+        ],
+        [
+          "merchant_is_online",
+          0.0,
+          1.105337449311762
+        ]
+      ],
+      "top_negative": [
+        [
+          "merchant_amount_std",
+          535.3555908203125,
+          -0.054358149089812034
+        ],
+        [
+          "day_of_week",
+          4.0,
+          -0.053784773094856554
+        ],
+        [
+          "is_new_mcc",
+          0.0,
+          -0.04929045901224228
+        ],
+        [
+          "txn_count_1h",
+          3.0,
+          -0.031062666442057994
+        ],
+        [
+          "merchant_txn_count",
+          131.0,
+          -0.012941658727041915
+        ]
+      ],
+      "total_shap": 18.902778771086396
+    }
+  ]
+}
