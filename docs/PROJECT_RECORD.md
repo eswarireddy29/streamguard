@@ -1812,7 +1812,56 @@ server's permission map to hide controls a role cannot use — but that
 is cosmetic, not security. The server returns 403 and anyone can edit
 JavaScript in their own browser; the mirror just avoids showing a
 button that would fail."*
+### Task 25 — Live transaction stream ✅ 20 Oct
 
+**Files:** `scripts/replay_stream.py`, `frontend/src/LiveStream.jsx`,
+`/recent-decisions` endpoint, tab shell in `App.jsx`
+
+#### The feeder had to exist first
+
+The event log held 791,109 transactions but **nothing replayed them
+into the API**. A "live stream" page with no stream behind it would be
+a mock, and the project record forbids replacing a hard feature with a
+placeholder. `replay_stream.py` feeds the scoring API at a chosen rate
+through the same HTTP path a payment switch would use.
+
+**It authenticates as `payment-switch` (role `service`)** — the Task 23
+role that can score and nothing else. The demo therefore exercises the
+real authorisation path, not a bypass.
+
+#### Polling, not websockets
+
+The page refreshes every 2 seconds. **A dropped poll is self-healing;
+a dropped socket needs reconnection logic.** For a console watched by a
+handful of analysts, that complexity is not worth buying.
+
+`since_id` means the client asks only for rows it has not seen.
+Re-sending the whole window every poll would grow the payload with the
+table and make the page slower the longer it runs.
+
+#### Verified live
+
+543 scored at 5/sec, **mean latency 2.1 ms**, rows streaming with real
+city names, amounts and probabilities. Stat tiles for scored /
+approved / review / blocked / flagged % / mean latency.
+
+**A number that needs reading carefully.** The page showed **3.87%
+flagged** against a 0.37% fraud rate — about 10× too high. The totals
+are cumulative over the whole `decisions` table, which still contains
+24 deliberately-known-fraud rows from the Task 22 `test_cases.py`
+runs. **Not a bug in the page: it is telling the truth about the
+table.** The figure falls toward the real rate as ordinary traffic
+dilutes the seeded cases. Worth stating because a flagged-rate tile is
+exactly the kind of number someone reads as live and acts on.
+
+#### A Vite/editor trap, again
+
+`App.jsx` was written **truncated** — the file ended at `</main>` with
+the closing `</div>`, `)` and `}` missing, producing
+`[PARSE_ERROR] Unexpected token`. Same class of failure as Task 24:
+the editor reported success, the file on disk was wrong. Diagnosed by
+counting tags from the terminal rather than reading the editor:
+python -c “import pathlib; t=pathlib.Path(‘src/App.jsx’).read_text().splitlines(); print(len(t)); print(sum(1 for l in t if ‘</main>’ in l))”
 
 **Interview talking point**
 
@@ -1824,6 +1873,86 @@ self-healing, a dropped socket needs reconnection code — and it asks
 only for decisions newer than the highest id it holds, so the payload
 does not grow with the table."*
 
+### Task 26 — Case queue + investigation view ✅ 20 Oct
+
+**Files:** `frontend/src/CaseQueue.jsx`, styles in `App.css`
+
+Frontend only — the Task 22 API already had everything needed.
+
+#### List-then-detail, not separate pages
+
+Two panes: queue left, selected case right. **An analyst works through
+a queue and should not lose their place on every verdict.** After a
+verdict closes a case the pane moves to the next one automatically.
+
+#### The SHAP bars are the point
+
+The investigation view renders the stored explanation as proportional
+bars, so the dominant feature is visible before any number is read.
+
+**A card-testing case (score 0.9985, ₹81.11):**
+
+| feature | value | SHAP |
+|---|---|---|
+| distinct_merchants_1h | 3 | +3.786 |
+| distance_from_prev_km | 0 | +2.955 |
+| amount | 81.11 | +2.823 |
+| txn_count_5m | 2 | +2.229 |
+| merchant_is_online | 0 | +1.099 |
+
+Three merchants in an hour, zero distance moved, a trivial amount, two
+transactions in five minutes. **A probe burst described in features an
+analyst can act on**, not a score.
+
+**A card-not-present case (score 0.9796, ₹15,423.56):**
+`is_manual_entry = 1` at **+12.101**, every other feature under +0.5 —
+the Task 18B finding made visual. One feature decides the case.
+
+#### The verdict UI states what the verdict IS
+
+Three buttons with the consequence written next to them:
+`confirmed_fraud` and `legitimate` are training labels;
+**`inconclusive` is recorded but never used**, with the reason in the
+UI — *an analyst who could not decide has not said the transaction was
+legitimate.* A dropdown labelled "status" would hide that.
+
+#### Verified end to end
+
+Nine verdicts submitted through the UI, each attributed to the
+**verified token identity**, not a form field:
+19:16:45 case_opened by system
+19:16:45 assigned by analyst_lasya
+19:16:45 verdict_submitted by analyst_lasya
+
+Closed view shows the verdict, who closed it, and the notes.
+
+#### Bug found and fixed — a stale detail pane
+
+After submitting a verdict the case closed in the database but the
+pane still showed the buttons. **The server was correct; the UI was
+not refreshing.** `load()` reloaded the queue, the closed case dropped
+out of the "Open" list, and `selected` pointed at a case no longer
+present — so the detail never re-rendered.
+
+**Diagnosed by querying the database rather than trusting the screen:**
+the verdicts were all there with the right actors and notes. Fixed by
+re-selecting the first remaining case when the chosen one leaves the
+list.
+
+**The same lesson as Tasks 24 and 25:** check the artefact, not the
+surface that claims to have produced it.
+
+**Interview talking point**
+
+*"The investigation view renders the stored SHAP values as
+proportional bars, so an analyst sees which feature decided the case
+before reading a number. On a card-testing probe it shows three
+merchants in an hour and zero distance moved; on a card-not-present
+case one feature carries +12 and everything else is under +0.5. I also
+labelled the verdict buttons with what they mean for training —
+'inconclusive' is recorded but never used as a label, because an
+analyst who could not decide has not said the transaction was
+legitimate."*
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -2038,7 +2167,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-## WHERE I AM RIGHT NOW → **24 of 32 tasks complete.**
+## WHERE I AM RIGHT NOW → **25 of 32 tasks complete.**
 
 ### What exists and works right now
 
@@ -2057,6 +2186,7 @@ alembic revision --autogenerate -m "description"
 | Cases | Analyst queue sorted by exposure, verdicts as training labels, append-only audit trail. 61 features stored per decision |
 | Auth | JWT, 3 roles (service/analyst/risk_manager), permissions as data. 7/7 access cases pass. Audit identity from token |
 | Frontend | React + Vite, 3 tabs. Live stream polling /recent-decisions every 2s, fed by replay_stream.py at a chosen rate |
+| Frontend | React + Vite, 3 tabs. Live stream (polling), case queue with SHAP investigation view and verdict flow |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |

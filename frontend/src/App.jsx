@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as api from './api'
 import LiveStream from './LiveStream'
+import CaseQueue from './CaseQueue'
 import './App.css'
 
 function Login({ onSignedIn }) {
@@ -134,12 +135,7 @@ export default function App() {
 
       <main>
         {tab === 'stream' && <LiveStream />}
-        {tab === 'cases' && (
-          <div className="card">
-            <h2>Case queue</h2>
-            <p className="muted">Arrives in Task 26.</p>
-          </div>
-        )}
+        {tab === 'cases' && <CaseQueue />}
         {tab === 'risk' && (
           <div className="card">
             <h2>Risk dashboard</h2>
