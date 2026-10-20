@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–E complete. Task 25 complete. Starting Task 26.
+**Status:** → Phases A–E complete. Task 26 complete. Starting Task 27.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -172,8 +172,8 @@ not reopen it.**
 **PHASE F — FRONTEND**
 24. ✅React + Vite setup, API client
 25. ✅Live transaction stream page
-26. ⬜ **← CURRENT.**Analyst case queue + investigation view with SHAP
-27. ⬜ Risk KPI dashboard + model monitoring page
+26. ✅Analyst case queue + investigation view with SHAP
+27. ⬜**← CURRENT.**Risk KPI dashboard + model monitoring page
 
 **PHASE G — QUALITY**
 28. ⬜ Unit + integration tests (pytest)
