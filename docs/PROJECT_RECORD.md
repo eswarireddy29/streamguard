@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–E complete. Task 26 complete. Starting Task 27.
+**Status:** → PHASE F COMPLETE (Tasks 24–27). Starting Phase G, Task 28.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -1953,6 +1953,78 @@ labelled the verdict buttons with what they mean for training —
 'inconclusive' is recorded but never used as a label, because an
 analyst who could not decide has not said the transaction was
 legitimate."*
+
+### Task 27 — Risk KPI dashboard ✅ 20 Oct
+
+**Files:** `/risk-kpis` endpoint in `cases.py` + `main.py`,
+`frontend/src/RiskDashboard.jsx`
+
+**Requires `read_stats`** — only `risk_manager` holds it. The analyst
+role has the tab disabled, and the server returns 403 if reached
+anyway.
+
+#### Money is ESTIMATED from confirmed verdicts only
+
+| | |
+|---|---|
+| Fraud prevented | ₹52,326 from 15 confirmed |
+| False alarm cost | ₹0 from 0 blocked-but-legitimate |
+| Net | ₹52,326 |
+
+**A blocked transaction nobody reviewed is not counted as prevented
+fraud.** Counting it would be marking our own homework — the model
+would be scoring itself. Only cases an analyst closed as
+`confirmed_fraud` contribute.
+
+**The ₹0 false alarm cost is not a perfect model.** Every verdict
+submitted so far was `confirmed_fraud`, so the denominator is empty. A
+zero here means *no evidence yet*, not *no false positives*. Stated
+because a KPI tile reading ₹0 would otherwise be taken as a result.
+
+Cost assumptions are passed as query parameters, not hardcoded, so the
+page can be re-run with a bank's real chargeback and churn figures.
+
+#### The score distribution is the honest chart
+
+Equal-width buckets on a **log** y-axis: ~1,000 decisions in the
+lowest bucket, ~30 in the highest, almost nothing between.
+
+Equal-width rather than quantile bucketing **because the shape IS the
+finding** — quantile buckets would redistribute the mass and hide it.
+Log scale because a linear axis shows one bar and nine empty slots.
+
+**This is the Task 15 reliability table as a picture**: the generator
+produces fraud that separates almost completely, and real card fraud
+does not look like this.
+
+#### Also on the page
+
+- **Decisions per hour** — approve/review/block as three lines
+- **Model monitoring** — p50/p95/p99/max latency from the stored
+  `decisions.latency_ms`, plus decisions per model version with first
+  and last timestamps, so a model swap is visible
+- **Label supply** — counts by verdict, with only `confirmed_fraud`
+  and `legitimate` marked usable. **This is the Task 30 input**: the
+  page shows how much retraining data exists.
+
+#### A number to read carefully
+
+**Flagged 2.82%** against a 0.37% fraud rate. Same cause as Task 25:
+the totals are cumulative over the `decisions` table, which still
+holds deliberately-known-fraud rows from `test_cases.py`. The page is
+telling the truth about the table, not about live traffic.
+
+**Interview talking point**
+
+*"The money tile only counts fraud an analyst confirmed. A blocked
+transaction nobody reviewed is not prevented fraud — counting it would
+let the model score itself. The score distribution chart uses
+equal-width buckets on a log axis because the shape is the finding:
+about a thousand decisions in the lowest bucket and thirty in the
+highest with nothing between. That is my generator being separable,
+and I would rather the dashboard show that plainly than smooth it away
+with quantile buckets."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -2187,6 +2259,7 @@ alembic revision --autogenerate -m "description"
 | Auth | JWT, 3 roles (service/analyst/risk_manager), permissions as data. 7/7 access cases pass. Audit identity from token |
 | Frontend | React + Vite, 3 tabs. Live stream polling /recent-decisions every 2s, fed by replay_stream.py at a chosen rate |
 | Frontend | React + Vite, 3 tabs. Live stream (polling), case queue with SHAP investigation view and verdict flow |
+| Frontend | React + Vite, 3 tabs: live stream, case queue with SHAP, risk dashboard with recharts. Role-gated |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
