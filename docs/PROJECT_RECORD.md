@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–D complete. Tasks 19–22 complete. Starting Task 22.
+**Status:** → Phases E complete. Tasks 19–23 complete. Starting Task 24.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -167,10 +167,10 @@ not reopen it.**
 20. ✅Latency measurement (p50/p95) + tuning
 21. ✅ Decision engine + business rules layer
 22. ✅Case management API (analyst queue, verdicts, audit)
-23. ⬜ **← CURRENT.**JWT authentication + roles
+23. ✅JWT authentication + roles
 
 **PHASE F — FRONTEND**
-24. ⬜ React + Vite setup, API client
+24. ⬜ **← CURRENT.**React + Vite setup, API client
 25. ⬜ Live transaction stream page
 26. ⬜ Analyst case queue + investigation view with SHAP
 27. ⬜ Risk KPI dashboard + model monitoring page
@@ -1745,6 +1745,58 @@ fraud is normal. The queue also sorts by score times amount rather than
 score, because a 0.95 on a ₹50 card-testing probe is worth less analyst
 time than a 0.40 on ₹200,000."*
 
+
+A caller cannot act as someone else, which is what makes the Task 22
+audit trail meaningful and the Task 30 training labels attributable.
+
+#### Security details worth defending
+
+**Timing-safe login.** An unknown username still runs a bcrypt hash
+before returning, so a missing user and a wrong password take the same
+time. Otherwise the response time tells an attacker which usernames
+exist. Both paths return the identical message, `invalid credentials`.
+
+**The dev secret cannot reach production.** `verify_configuration()`
+raises at startup if `STREAMGUARD_JWT_SECRET` is still the development
+default while `STREAMGUARD_ENV` says production, and logs a warning
+otherwise. A dev convenience that silently survives into production is
+how a service ends up with forgeable tokens.
+
+**Short-lived tokens with a `jti`.** 60 minutes by default, each with a
+unique id, so a single token can be revoked later without invalidating
+every token the user holds. A stolen token is useful for minutes, not
+forever.
+
+**JWT rather than sessions**, because Task 19 chose stateless scoring —
+a token the server does not have to look up is one fewer thing in the
+hot path measured at Task 20.
+
+**`/health` stays open.** A load balancer needs it.
+
+#### Dependency note — a real version conflict
+
+`passlib 1.7.4` + `bcrypt 5.0.0` fails with *"module 'bcrypt' has no
+attribute `__about__`"*: passlib predates bcrypt 4 and reads an
+attribute that no longer exists. **Pinned `bcrypt==3.2.2`** in
+`requirements.txt`. Also added `python-jose[cryptography]==3.3.0` and
+`passlib[bcrypt]==1.7.4`.
+
+Passwords are capped at 72 bytes in `UserStore.add()`, because bcrypt
+raises above that — enforced at the boundary rather than discovered in
+production.
+
+**Interview talking point**
+
+*"My case API had an audit trail, but the actor field came from the
+request body — the caller told the server who they were. That is not an
+audit trail. I added JWT auth with three roles and removed the analyst
+field from the request entirely; the username now comes from the
+verified token. The role that mattered most was the service account for
+the payment switch, which calls the scoring endpoint thousands of times
+a day and is therefore the most exposed credential. It can score and
+nothing else — a compromised switch key cannot read the analyst queue
+or close cases."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -1959,7 +2011,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-## WHERE I AM RIGHT NOW → **22 of 32 tasks complete.**
+## WHERE I AM RIGHT NOW → **23 of 32 tasks complete. Phases A–E done. Starting Phase F (frontend).**
 
 ### What exists and works right now
 
@@ -1976,6 +2028,7 @@ alembic revision --autogenerate -m "description"
 | API | FastAPI `/score` + `/health`. In-process p50 0.69 ms / p99 7.13 ms. Over HTTP p50 15.8 ms / p99 34.1 ms. Budget 100 ms — PASS |
 | Decisions | Policy rules + cost thresholds, most-severe-wins, full audit trail. 10/10 rule cases pass |
 | Cases | Analyst queue sorted by exposure, verdicts as training labels, append-only audit trail. 61 features stored per decision |
+| Auth | JWT, 3 roles (service/analyst/risk_manager), permissions as data. 7/7 access cases pass. Audit identity from token |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
@@ -2129,6 +2182,12 @@ judged by — it flatters imbalanced data.
   needs a durable state store.
 - **Warm-up/benchmark offsets must match** or the decision mix is
   nonsense. Set `STREAMGUARD_WARM_EVENTS` to the benchmark's `--skip`.
+  - **Users are in-memory** — seeded at startup with dev passwords. A
+  real deployment uses the bank's identity provider; the point of
+  Task 23 was the authorisation model, not user storage.
+- **Dev JWT secret** — set `STREAMGUARD_JWT_SECRET` and
+  `STREAMGUARD_ENV=production` before any real deployment. The service
+  refuses to start with the default in production.
 
 ### Three bugs already found — all of them silent
 
