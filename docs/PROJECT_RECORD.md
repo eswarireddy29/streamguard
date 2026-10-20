@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–D complete. Tasks 19–21 complete. Starting Task 22.
+**Status:** → Phases A–D complete. Tasks 19–22 complete. Starting Task 22.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -166,8 +166,8 @@ not reopen it.**
 19. ✅FastAPI scoring service + request validation
 20. ✅Latency measurement (p50/p95) + tuning
 21. ✅ Decision engine + business rules layer
-22. ⬜ **← CURRENT.** Case management API (analyst queue, verdicts, audit)
-23. ⬜ JWT authentication + roles
+22. ✅Case management API (analyst queue, verdicts, audit)
+23. ⬜ **← CURRENT.**JWT authentication + roles
 
 **PHASE F — FRONTEND**
 24. ⬜ React + Vite setup, API client
@@ -1636,6 +1636,115 @@ and cannot override a block score or a regulatory limit — I have
 explicit test cases for both, because an unbounded whitelist is an
 attack surface."*
 
+### Task 22 — Case management API ✅ 20 Oct
+
+**Files:** `src/streamguard/api/cases.py`, `scripts/test_cases.py`,
+endpoints added to `main.py`
+
+**Until now a score vanished after the HTTP response.** Three things
+need it to persist:
+
+1. an analyst must work a queue of flagged transactions
+2. their verdict is the **only ground truth this system gets after
+   deployment** — Task 30 retrains on exactly these labels
+3. an audit trail must answer *"who decided what, when, and why"*,
+   which is a regulatory requirement
+
+The Task 4B schema was built for this and needed no migration:
+`decisions` (features as JSONB), `cases` (the queue), `case_events`
+(append-only audit log).
+
+#### Priority is score × amount, not score
+
+A 0.95 score on a ₹50 card-testing probe costs ₹50. A 0.40 score on
+₹200,000 costs four thousand times more. Analyst time should go where
+the exposure is — the same reasoning as the Task 16 cost threshold.
+
+**Verified in the queue:**
+
+| case | priority | score | amount |
+|---|---|---|---|
+| CASE0000000024 | **2** | 0.9796 | ₹15,424 |
+| CASE0000000016 | 3 | **0.9930** | ₹2,451 |
+
+The lower-scoring case ranks higher. That is the sort working.
+
+#### The verdict is the label
+
+`confirmed_fraud` and `legitimate` are usable as training labels.
+**`inconclusive` is recorded but explicitly NOT usable** — an analyst
+who could not decide has not said the transaction was fine, and
+training on it as a negative would teach the model that genuine fraud
+is normal. The response carries `usable_as_label` so the caller cannot
+misread it.
+
+Guards, both verified returning 400:
+- submitting a second verdict → *"case already closed with verdict
+  'confirmed_fraud'"*
+- an invalid verdict → the valid set is named in the error
+
+#### Features stored: 61, not 58
+
+The `decisions.features` JSONB stores **49 base + 12 graph = 61**,
+while the model uses 58. The three extra are `ring_size` and
+`ring_fraud_density` (dropped at Task 18A as dead) plus the base
+feature dropped at 18B. Storing a few unused features costs nothing
+and makes the record more complete for skew detection.
+
+**Why this matters at all:** the Task 4B design note said features are
+stored as JSONB so training/serving skew can be **detected** later, and
+you can only detect it if you recorded it. An earlier version stored
+only the 49 base features, which would have left the graph features
+unverifiable. Fixed by calling `graph.compute()` — read-only, so it
+does not double-update the state that `score()` already advanced.
+
+#### Endpoints
+
+| endpoint | purpose |
+|---|---|
+| `GET /cases` | the queue, most urgent first |
+| `GET /cases/{ref}` | one case with SHAP reasons and full audit trail |
+| `POST /cases/{ref}/assign` | claim a case |
+| `POST /cases/{ref}/verdict` | close it with a conclusion |
+| `GET /cases-stats` | decision counts, case states, labels available |
+
+**Persisting is best-effort.** A database problem must not stop an
+authorisation decision being returned, so the write is wrapped and
+failures are logged, not raised.
+
+#### Verified end to end
+
+12 known-fraud transactions scored → 10 flagged → case opened →
+assigned → investigated → verdict submitted → closed.
+
+**Audit trail for CASE0000000024:**
+19:16:45 case_opened by system
+{score: 0.9796, action: block, decision_source: model}
+19:16:45 assigned by analyst_lasya
+19:16:45 verdict_submitted by analyst_lasya
+{verdict: confirmed_fraud, usable_as_label: true}
+
+**The investigation view** shows what the analyst reads:
+`is_manual_entry = 1.00` with SHAP **+12.10**, then amount, implied
+speed and merchant counts. That is the Task 26 UI's data already
+available over HTTP.
+
+**A testing quirk, not a production path:** re-running `test_cases.py`
+creates duplicate cases for the same transactions, because the
+idempotency cache is per-process and clears on restart while the
+database does not. A real stream never replays a `transaction_ref`.
+
+**Interview talking point**
+
+*"The analyst's verdict is the only ground truth the system gets after
+deployment, so the case API treats it as a training label rather than a
+status field. I made 'inconclusive' explicitly unusable — an analyst
+who could not decide has not told me the transaction was legitimate,
+and training on it as a negative would teach the model that genuine
+fraud is normal. The queue also sorts by score times amount rather than
+score, because a 0.95 on a ₹50 card-testing probe is worth less analyst
+time than a 0.40 on ₹200,000."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -1850,7 +1959,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-## WHERE I AM RIGHT NOW → **21 of 32 tasks complete.**
+## WHERE I AM RIGHT NOW → **22 of 32 tasks complete.**
 
 ### What exists and works right now
 
@@ -1866,6 +1975,7 @@ alembic revision --autogenerate -m "description"
 | Tracking | MLflow local file backend, ~25 runs backfilled from Tasks 12–18 |
 | API | FastAPI `/score` + `/health`. In-process p50 0.69 ms / p99 7.13 ms. Over HTTP p50 15.8 ms / p99 34.1 ms. Budget 100 ms — PASS |
 | Decisions | Policy rules + cost thresholds, most-severe-wins, full audit trail. 10/10 rule cases pass |
+| Cases | Analyst queue sorted by exposure, verdicts as training labels, append-only audit trail. 61 features stored per decision |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |

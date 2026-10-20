@@ -25,6 +25,8 @@ from streamguard.api.schemas import (
     ScoreRequest, ScoreResponse, HealthResponse, FORBIDDEN_FIELDS,
 )
 from streamguard.api.scorer import Scorer, ScorerConfig
+from streamguard.api.cases import CaseRepository, Verdict, CaseStatus
+from pydantic import BaseModel, Field
 from streamguard.ml.splitter import PROJECT_ROOT
 from streamguard.utils.logging_config import get_logger, setup_logging
 
@@ -34,6 +36,17 @@ MODEL_TAG = os.getenv("STREAMGUARD_MODEL", "lgbm_v6")
 WARM_EVENTS = int(os.getenv("STREAMGUARD_WARM_EVENTS", "0"))
 
 _scorer: Scorer | None = None
+_cases = CaseRepository()
+
+
+class AssignRequest(BaseModel):
+    analyst: str = Field(..., min_length=1, max_length=64)
+
+
+class VerdictRequest(BaseModel):
+    analyst: str = Field(..., min_length=1, max_length=64)
+    verdict: str = Field(..., description=str(sorted(Verdict.ALL)))
+    notes: str = Field(default="", max_length=4000)
 
 
 @asynccontextmanager
@@ -81,14 +94,16 @@ def health() -> HealthResponse:
     """Is the service ready, and what is loaded?"""
     return HealthResponse(**get_scorer().health())
 
-
 @app.post("/score", response_model=ScoreResponse)
-def score(req: ScoreRequest) -> ScoreResponse:
-    """Score one transaction.
+def score(req: ScoreRequest, persist: bool = True) -> ScoreResponse:
+    """Score one transaction, and persist the decision.
 
     The request schema forbids extra fields, so a client cannot send
     is_fraud or fraud_type. That is enforced by Pydantic before this
     function runs - see schemas.FORBIDDEN_FIELDS.
+
+    Persisting is best-effort: a database problem must not stop an
+    authorisation decision being returned. The failure is logged.
     """
     s = get_scorer()
     try:
@@ -97,8 +112,27 @@ def score(req: ScoreRequest) -> ScoreResponse:
         log.error("scoring_failed", ref=req.transaction_ref, error=str(exc))
         raise HTTPException(500, f"scoring failed: {exc}")
 
-    return ScoreResponse(transaction_ref=req.transaction_ref, **result)
+    if persist and not result.get("duplicate"):
+        try:
+            payload = req.to_payload()
+            # Store ALL features the model saw, base + graph. The
+            # Task 4B note was explicit: features are stored as JSONB
+            # so training/serving skew can be DETECTED later, and you
+            # can only detect it if you recorded it. Recording 49 of
+            # 58 would leave the graph features unverifiable.
+            base = s.computer.compute_features(payload)
+            graph = s.graph.compute(
+                str(payload["card_ref"]), str(payload["merchant_ref"]),
+                str(payload["device_ref"]) if payload.get("device_ref") else None,
+                req.occurred_at,
+            )
+            _cases.record_decision(req.transaction_ref, result,
+                                   {**base, **graph})
+        except Exception as exc:
+            log.error("persist_failed", ref=req.transaction_ref,
+                      error=str(exc))
 
+    return ScoreResponse(transaction_ref=req.transaction_ref, **result)
 
 @app.exception_handler(Exception)
 async def unhandled(request: Request, exc: Exception):
@@ -116,3 +150,57 @@ def root() -> dict:
         "endpoints": ["/health", "/score"],
         "forbidden_request_fields": sorted(FORBIDDEN_FIELDS),
     }
+# ---------------------------------------------------------------------
+#  Task 22 - case management
+# ---------------------------------------------------------------------
+
+@app.get("/cases")
+def list_cases(limit: int = 50, status: str = CaseStatus.OPEN,
+               assigned_to: str | None = None) -> dict:
+    """The analyst queue, most urgent first.
+
+    Priority is score x amount, not score alone: a 0.95 on a Rs 50
+    card-testing probe matters less than a 0.40 on Rs 200,000.
+    """
+    cases = _cases.queue(limit=limit, status=status,
+                         assigned_to=assigned_to)
+    return {"count": len(cases), "status": status,
+            "cases": [c.to_dict() for c in cases]}
+
+
+@app.get("/cases/{case_ref}")
+def get_case(case_ref: str) -> dict:
+    """One case with its SHAP explanation and full audit trail."""
+    case = _cases.get(case_ref)
+    if case is None:
+        raise HTTPException(404, f"case {case_ref} not found")
+    return case
+
+
+@app.post("/cases/{case_ref}/assign")
+def assign_case(case_ref: str, req: AssignRequest) -> dict:
+    result = _cases.assign(case_ref, req.analyst)
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("reason", "assign failed"))
+    return result
+
+
+@app.post("/cases/{case_ref}/verdict")
+def submit_verdict(case_ref: str, req: VerdictRequest) -> dict:
+    """Close a case with the analyst's conclusion.
+
+    This verdict is the label Task 30 retrains on. 'inconclusive' is
+    recorded but NOT usable as a label - an analyst who could not
+    decide has not said the transaction was legitimate.
+    """
+    result = _cases.submit_verdict(case_ref, req.analyst,
+                                   req.verdict, req.notes)
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("reason", "verdict failed"))
+    return result
+
+
+@app.get("/cases-stats")
+def case_stats() -> dict:
+    """Decision counts, case states, and how many labels exist."""
+    return _cases.stats()
