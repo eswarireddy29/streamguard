@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases E complete. Tasks 19–23 complete. Starting Task 24.
+**Status:** → Phases A–E complete. Task 24 complete. Starting Task 25.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -170,8 +170,8 @@ not reopen it.**
 23. ✅JWT authentication + roles
 
 **PHASE F — FRONTEND**
-24. ⬜ **← CURRENT.**React + Vite setup, API client
-25. ⬜ Live transaction stream page
+24. ✅React + Vite setup, API client
+25. ⬜  **← CURRENT.**Live transaction stream page
 26. ⬜ Analyst case queue + investigation view with SHAP
 27. ⬜ Risk KPI dashboard + model monitoring page
 
@@ -1797,6 +1797,22 @@ a day and is therefore the most exposed credential. It can score and
 nothing else — a compromised switch key cannot read the analyst queue
 or close cases."*
 
+
+Fixed by writing the files with a short Python script
+(`write_app.py`, `write_css.py`). **The lesson is the Phase D one
+again: check the artefact, not the tool that claims to have produced
+it.**
+
+**Interview talking point**
+
+*"I proxied the API through Vite rather than enabling CORS, because
+the alternative is shipping a permissive CORS policy to production to
+solve a development-only problem. The frontend also mirrors the
+server's permission map to hide controls a role cannot use — but that
+is cosmetic, not security. The server returns 403 and anyone can edit
+JavaScript in their own browser; the mirror just avoids showing a
+button that would fail."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -2011,7 +2027,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-## WHERE I AM RIGHT NOW → **23 of 32 tasks complete. Phases A–E done. Starting Phase F (frontend).**
+## WHERE I AM RIGHT NOW → **24 of 32 tasks complete.**
 
 ### What exists and works right now
 
@@ -2029,6 +2045,7 @@ alembic revision --autogenerate -m "description"
 | Decisions | Policy rules + cost thresholds, most-severe-wins, full audit trail. 10/10 rule cases pass |
 | Cases | Analyst queue sorted by exposure, verdicts as training labels, append-only audit trail. 61 features stored per decision |
 | Auth | JWT, 3 roles (service/analyst/risk_manager), permissions as data. 7/7 access cases pass. Audit identity from token |
+| Frontend | React + Vite on 5173, /api proxied to 8000. JWT session in sessionStorage, role-aware nav |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
