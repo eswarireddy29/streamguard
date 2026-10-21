@@ -54,31 +54,53 @@ class ScoreRequest(BaseModel):
     card_type: str | None = Field(default=None, max_length=32)
 
     # Location of the transaction.
-    city: str | None = None
+    # Task 29: every free-text field is bounded. An unbounded string
+    # is a memory risk and reaches a database column with its own
+    # limit; rejecting it here gives a 422 rather than a 500 later.
+    city: str | None = Field(default=None, max_length=128)
     country: str | None = Field(default=None, max_length=2)
     lat: float | None = Field(default=None, ge=-90, le=90)
     lon: float | None = Field(default=None, ge=-180, le=180)
 
     # The customer's home, needed for distance_from_home_km.
-    home_city: str | None = None
+    home_city: str | None = Field(default=None, max_length=128)
     home_country: str | None = Field(default=None, max_length=2)
     home_lat: float | None = Field(default=None, ge=-90, le=90)
     home_lon: float | None = Field(default=None, ge=-180, le=180)
 
     # Merchant context.
     mcc: str | None = Field(default=None, max_length=8)
-    merchant_category: str | None = None
+    merchant_category: str | None = Field(default=None, max_length=128)
     merchant_is_online: bool | None = None
-    merchant_city: str | None = None
+    merchant_city: str | None = Field(default=None, max_length=128)
     merchant_country: str | None = Field(default=None, max_length=2)
 
-    @field_validator("amount")
+    @field_validator("amount", "lat", "lon", mode="before")
     @classmethod
-    def amount_is_finite(cls, v: float) -> float:
-        if v != v or v in (float("inf"), float("-inf")):
-            raise ValueError("amount must be a finite number")
-        return v
+    def must_be_finite(cls, v):
+        """Reject NaN and infinity BEFORE Pydantic coerces the value.
 
+        Task 29 found NaN passing straight through: Pydantic accepts it
+        as a valid float, so the old validator never saw a problem, and
+        it reached the model as a feature. Task 10 guarantees zero
+        NaN/inf in the feature vector - this is that guarantee enforced
+        at the API boundary.
+
+        mode="before" matters: by the time the default validator runs,
+        the value is already a float and NaN looks ordinary.
+        """
+        import math
+
+        if v is None:
+            return v
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return v  # let the normal type validation report it
+        if math.isnan(f) or math.isinf(f):
+            raise ValueError("value must be a finite number, not NaN or inf")
+        return v
+    
     def to_payload(self) -> dict:
         """The dict shape FeatureComputer.process() expects."""
         d = self.model_dump()

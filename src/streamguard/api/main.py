@@ -18,7 +18,7 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Request, Depends, status
+from fastapi import FastAPI, HTTPException, Request, Depends, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 
@@ -200,13 +200,34 @@ def score(req: ScoreRequest, persist: bool = True,
 
     return ScoreResponse(transaction_ref=req.transaction_ref, **result)
 
+@app.exception_handler(ValueError)
+async def bad_value(request: Request, exc: ValueError):
+    """A malformed body is the CALLER's problem, not a server fault.
+
+    Task 29 found `amount: NaN` returning 500. NaN is not valid JSON,
+    so the parser raises while deserialising - before Pydantic sees
+    the request, so the schema validator never gets a chance. The
+    value never reaches the model, which is what matters, but a 500
+    tells the caller to retry and tells an operator to investigate.
+    400 says what is true: fix your request.
+    """
+    log.info("bad_request", path=str(request.url.path), error=str(exc))
+    return JSONResponse(
+        status_code=400,
+        content={"detail": "malformed request body"})
+
+
 @app.exception_handler(Exception)
 async def unhandled(request: Request, exc: Exception):
-    """Never leak a stack trace to a caller."""
+    """Never leak a stack trace to a caller.
+
+    The log keeps the detail for an operator; the response says
+    nothing an attacker can use. Verified at Task 29: no response
+    body leaked a traceback, a table name, or the database password.
+    """
     log.error("unhandled", path=str(request.url.path), error=str(exc))
     return JSONResponse(status_code=500,
                         content={"detail": "internal error"})
-
 
 @app.get("/")
 def root() -> dict:
@@ -221,9 +242,18 @@ def root() -> dict:
 # ---------------------------------------------------------------------
 
 @app.get("/cases")
-def list_cases(limit: int = 50, status: str = CaseStatus.OPEN,
-               assigned_to: str | None = None,
-               user: TokenData = Depends(require("read_cases"))) -> dict:
+def list_cases(
+    # Task 29: bounded at the boundary. An unvalidated limit reached
+    # SQL and produced "LIMIT must not be negative" - a 500 with the
+    # full query and parameters in the log. ge/le makes it a 422 that
+    # never touches the database.
+    limit: int = Query(default=50, ge=1, le=500),
+    status: str = Query(default=CaseStatus.OPEN,
+                        pattern="^(open|in_review|closed)$"),
+    assigned_to: str | None = Query(default=None, max_length=64),
+    user: TokenData = Depends(require("read_cases")),
+) -> dict:
+    
     """The analyst queue, most urgent first.
 
     Priority is score x amount, not score alone: a 0.95 on a Rs 50
@@ -290,8 +320,11 @@ def login(req: LoginRequest) -> dict:
     return create_token(user)
 
 @app.get("/recent-decisions")
-def recent_decisions(limit: int = 50, since_id: int = 0,
-                     user: TokenData = Depends(require("read_cases"))) -> dict:
+def recent_decisions(
+    limit: int = Query(default=50, ge=1, le=500),
+    since_id: int = Query(default=0, ge=0),
+    user: TokenData = Depends(require("read_cases")),
+) -> dict:
     """Decisions newest-first, for the live stream page.
 
     Polling, not websockets: the page refreshes every couple of
@@ -303,8 +336,11 @@ def recent_decisions(limit: int = 50, since_id: int = 0,
 
 
 @app.get("/risk-kpis")
-def risk_kpis(fn_cost: float = 5000.0, fp_cost: float = 200.0,
-              user: TokenData = Depends(require("read_stats"))) -> dict:
+def risk_kpis(
+    fn_cost: float = Query(default=5000.0, gt=0, le=10_000_000),
+    fp_cost: float = Query(default=200.0, gt=0, le=10_000_000),
+    user: TokenData = Depends(require("read_stats")),
+) -> dict:
     """Risk manager view. Requires read_stats - analysts get 403."""
     return _cases.risk_kpis(fn_cost=fn_cost, fp_cost=fp_cost)
 
