@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–F complete. Tasks 31 complete. Starting Task 32
+**Status:** → ALL 32 TASKS COMPLETE. Repo live at github.com/eswarireddy29/streamguard, CI green.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -182,7 +182,7 @@ not reopen it.**
 31. ✅Load testing + structured logging + observability
 
 **PHASE H — DELIVERY**
-32. ⬜**← CURRENT.** README, Mermaid diagrams, GitHub + CI, screenshots, demo script,
+32.✅ README, Mermaid diagrams, GitHub + CI, screenshots, demo script,
     project report, slides, interview Q&A
 
 ---
@@ -2377,6 +2377,72 @@ more useful finding came from the per-stage metrics: the model is
 about four milliseconds of a fifty-millisecond request. Optimising it
 would be optimising eight percent of the problem."*
 
+### Task 32 — Delivery (implementation) ✅ 21 Oct
+
+**Repo:** https://github.com/eswarireddy29/streamguard
+
+**Files:** `README.md`, `.github/workflows/tests.yml`
+
+#### What is and is not committed
+
+`.gitignore` excludes `data/events/` (617 MB) and `data/processed/`
+(270 MB) — regenerable in ~20 minutes by the four build scripts named in
+the README. Models `lgbm_v2` and `lgbm_v3` were dropped: both were
+trained on the leaked data fixed at Task 13.7, and keeping them invites
+loading the wrong one. `pre_fix/lgbm_v1` is kept as the before/after
+evidence.
+
+Total tracked: 19.9 MB, largest file 6.6 MB. `.env` was ignored from
+Task 3 and never appears in history.
+
+#### CI runs 104 of 158 tests, and says which it skips
+
+A green badge that hides what it did not run is worse than no badge, so
+the workflow writes a table to the run summary naming every skipped
+suite and why: `test_feature_file.py` and `test_generator_integrity.py`
+need the uncommitted feature file; `test_api.py` and three tests in
+`test_hardening.py` need PostgreSQL.
+
+**Those three were found by CI, not predicted.** They live in a file
+classified as self-contained, but reach the database through
+`GET /cases` and returned 500 where they expected 200. Deselected by
+name rather than by skipping the file — the other 22 tests in it need no
+database.
+
+#### Two bugs this surfaced
+
+**`requirements.txt` had two pins merged into one line:**
+`typer==0.15.1bcrypt==3.2.2`. Caused by the Task 23
+`pip freeze | findstr >> requirements.txt` — the file had no trailing
+newline, so the appended line joined the last one. It installed fine
+locally because those packages were already present; CI, starting from
+nothing, failed immediately. **A dependency file that only works on the
+machine that wrote it is not a dependency file.**
+
+**VS Code was silently saving to the wrong folder.** Several files
+appeared saved but were absent from the project root — they had landed
+in `.github/workflows/`, following the last-opened file's directory.
+Diagnosed by listing the root's most recently modified files from the
+terminal rather than trusting the editor. Same lesson as Tasks 24–26:
+check the artefact, not the tool that claims to have produced it.
+
+#### The README leads with the limitation
+
+The first section after the title states that the data is synthetic and
+separable by design, and that 0.9573 describes the generator — before
+any result is quoted. The evidence is given as a number: 110,805 of
+123,117 test rows sit in the lowest score bucket and hold one fraud
+between them.
+
+**Interview talking point**
+
+*"My CI failed on the first run because requirements.txt had two pinned
+packages merged onto one line — a missing trailing newline from a
+`pip freeze` append months earlier. It had installed cleanly on my
+machine the whole time, because those packages were already there. A
+clean environment is the only honest test of a dependency file."*
+
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -2591,7 +2657,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-## WHERE I AM RIGHT NOW → **30 of 32 tasks complete.**
+## WHERE I AM RIGHT NOW → **32 of 32 tasks complete.**
 
 ### What exists and works right now
 
