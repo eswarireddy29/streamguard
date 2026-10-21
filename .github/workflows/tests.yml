@@ -1,0 +1,77 @@
+# .github/workflows/tests.yml
+#
+# Task 32 - run the tests that need nothing external, on every push.
+#
+# WHAT THIS DOES NOT RUN, and why:
+#
+#   test_feature_file.py        needs data/processed/features.parquet
+#   test_generator_integrity.py   (270 MB, regenerable, not committed)
+#   parts of test_splitter.py
+#   parts of test_api.py        needs a live PostgreSQL database
+#
+# Those are checks to run locally after regenerating the data. CI's
+# job is to catch a broken import or a logic regression on every
+# commit, in under two minutes.
+#
+# A green badge that hides what it did not run is worse than no
+# badge, so the skipped suites are named in the run summary below.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install -e .
+
+      - name: Verify imports
+        # A broken import is the cheapest failure to catch and the
+        # most annoying to discover later.
+        run: |
+          python -c "import streamguard.api.main"
+          python -c "import streamguard.ml.drift"
+          python -c "import streamguard.ml.lgbm"
+          python -c "import streamguard.features.graph"
+
+      - name: Run self-contained tests
+        run: |
+          pytest -v \
+            tests/test_decisions.py \
+            tests/test_auth.py \
+            tests/test_hardening.py \
+            tests/test_drift.py \
+            tests/test_no_leakage.py
+
+      - name: Report what was not run
+        if: always()
+        run: |
+          echo "### Not run in CI" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| suite | needs |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| test_feature_file.py | features.parquet (270 MB, regenerable) |" >> $GITHUB_STEP_SUMMARY
+          echo "| test_generator_integrity.py | features.parquet |" >> $GITHUB_STEP_SUMMARY
+          echo "| test_splitter.py | features.parquet |" >> $GITHUB_STEP_SUMMARY
+          echo "| test_api.py | a live PostgreSQL database |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Run \`pytest\` locally for the full 158." >> $GITHUB_STEP_SUMMARY
