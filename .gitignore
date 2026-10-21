@@ -50,3 +50,17 @@ frontend/.vite/
 Thumbs.db
 Desktop.ini
 *.log
+# Regenerable data (Task 32)
+# Not committed: 617 MB of event log and 270 MB of parquet.
+# Rebuild with: generate_transactions -> load_event_log -> build_features
+data/events/
+data/processed/
+# Regenerable data (Task 32)
+# Not committed: 617 MB of event log and 270 MB of parquet.
+# Rebuild with: generate_transactions -> load_event_log -> build_features
+data/events/
+data/processed/
+
+# Superseded models - trained on the leaked data fixed at Task 13.7
+models/lgbm_v2*
+models/lgbm_v3*
