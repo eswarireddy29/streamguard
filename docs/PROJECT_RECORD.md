@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–F complete. Task 28 complete. Starting Task 29.
+**Status:** → Phases A–F complete. Tasks 28–29 complete. Starting Task 30
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -177,8 +177,8 @@ not reopen it.**
 
 **PHASE G — QUALITY**
 28. ✅Unit + integration tests (pytest)
-29. ⬜**← CURRENT.**API tests + error handling hardening
-30. ⬜ Drift monitoring (Evidently) + retraining from analyst labels
+29. ✅API tests + error handling hardening
+30. ⬜**← CURRENT.**Drift monitoring (Evidently) + retraining from analyst labels
 31. ⬜ Load testing + structured logging + observability
 
 **PHASE H — DELIVERY**
@@ -2045,6 +2045,72 @@ constant, the token's permission check, and a real HTTP request
 returning 200 where it should have returned 403. I had only predicted
 two of them."*
 
+
+**Task 10 guarantees zero NaN/inf in the feature vector.** This was
+that guarantee being bypassed at the API boundary.
+
+Two separate problems, and the first one was mine:
+
+The existing validator **never fired**. Pydantic coerces the value to
+a float before a normal validator runs, and by then NaN looks like an
+ordinary float. **Fixed with `mode="before"`**, extended to `lat` and
+`lon`. Verified directly: NaN, inf and -inf all rejected; 1e-300 and
+100.0 still accepted.
+
+But the 500 persisted, because **NaN is not valid JSON** — the parser
+raises while deserialising, before Pydantic sees the request. The
+value never reached the model, which is what matters, but **a 500
+tells the caller to retry and an operator to investigate.** Added a
+`ValueError` handler returning **400**: a malformed body is the
+caller's problem, and the status should say so.
+
+#### BUG 3 — unbounded free-text fields
+
+`city`, `home_city`, `merchant_category` and `merchant_city` had no
+length limit. A 100KB city was accepted. **An unbounded string is a
+memory risk and hits a database column limit later**, turning a bad
+request into a 500. Capped at 128.
+
+#### What was already correct
+
+- **No leakage.** No error body contained a traceback, a table name,
+  `sqlalchemy`, `psycopg`, or the database password.
+- **SQL injection is harmless.** `'; DROP TABLE cases; --` in a path
+  parameter returns 404 and the table survives — parameterised
+  queries throughout.
+- **Auth edges all 401:** empty bearer, missing scheme, wrong scheme
+  (`Basic`), one extra character on a token.
+- **Missing resources:** 404 for an unknown case, 400 for acting on
+  one.
+
+#### A false alarm worth recording
+
+Five probes reported 503 on `/score`. **That is correct behaviour** —
+the probe runs through `TestClient` without the lifespan, so no scorer
+is warmed and `get_scorer()` returns *"service is still warming up"*.
+The probe was wrong, not the service. Recorded because a survey that
+cries wolf is worse than no survey.
+
+#### 28 tests added — 111 → 136
+
+Every test corresponds to a problem the probe actually found.
+`test_database_password_never_appears` checks several error paths for
+`StreamGuard2026` specifically: the password lives in `.env` and
+settings, and must never reach a response whatever goes wrong.
+
+**Interview talking point**
+
+*"I probed the API with hostile input before writing any hardening,
+because fixing imagined problems is guessing. It found three real
+ones. An unvalidated limit parameter reached SQL and produced a 500
+with the whole query in the log — `limit=-1` crashed it and
+`limit=99999999` would have read the entire table. NaN in an amount
+produced a 500: my existing validator never fired, because Pydantic
+coerces to float before a normal validator runs, so NaN looked
+ordinary — `mode='before'` fixed that. And free-text fields had no
+length limit at all. What was already right was that no error body
+leaked a traceback, a table name, or the database password."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -2281,6 +2347,7 @@ alembic revision --autogenerate -m "description"
 | Frontend | React + Vite, 3 tabs. Live stream (polling), case queue with SHAP investigation view and verdict flow |
 | Frontend | React + Vite, 3 tabs: live stream, case queue with SHAP, risk dashboard with recharts. Role-gated |
 | Tests | 111 passing — leakage, integrity, split, generator, decisions, auth, API contract |
+| Tests | 136 passing — leakage, integrity, split, generator, decisions, auth, API contract, hardening |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
