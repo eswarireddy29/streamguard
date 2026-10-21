@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → PHASE F COMPLETE (Tasks 24–27). Starting Phase G, Task 28.
+**Status:** → Phases A–F complete. Task 28 complete. Starting Task 29.
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -176,8 +176,8 @@ not reopen it.**
 27. ✅Risk KPI dashboard + model monitoring page
 
 **PHASE G — QUALITY**
-28. ⬜ **← CURRENT.**Unit + integration tests (pytest)
-29. ⬜ API tests + error handling hardening
+28. ✅Unit + integration tests (pytest)
+29. ⬜**← CURRENT.**API tests + error handling hardening
 30. ⬜ Drift monitoring (Evidently) + retraining from analyst labels
 31. ⬜ Load testing + structured logging + observability
 
@@ -2025,6 +2025,26 @@ highest with nothing between. That is my generator being separable,
 and I would rather the dashboard show that plainly than smooth it away
 with quantile buckets."*
 
+
+The third is the important one: it caught the regression **through a
+real HTTP request**, not just by reading a dictionary. Two were
+predicted; the third was not. **Multiple independent tests catching
+one bug from different angles is what a good suite looks like** — the
+same observation recorded at Task 11.
+
+Restored → 111 passing.
+
+**Interview talking point**
+
+*"Phase E added about two thousand lines of serving code with no
+tests, so I added sixty-seven that run in twenty seconds without
+starting a server. Then I broke the permission map on purpose — giving
+the payment-switch service role access to the analyst queue — to check
+the suite would catch it. Three tests failed from three angles: the
+constant, the token's permission check, and a real HTTP request
+returning 200 where it should have returned 403. I had only predicted
+two of them."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -2239,7 +2259,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-## WHERE I AM RIGHT NOW → **25 of 32 tasks complete.**
+## WHERE I AM RIGHT NOW → **28 of 32 tasks complete.**
 
 ### What exists and works right now
 
@@ -2260,6 +2280,7 @@ alembic revision --autogenerate -m "description"
 | Frontend | React + Vite, 3 tabs. Live stream polling /recent-decisions every 2s, fed by replay_stream.py at a chosen rate |
 | Frontend | React + Vite, 3 tabs. Live stream (polling), case queue with SHAP investigation view and verdict flow |
 | Frontend | React + Vite, 3 tabs: live stream, case queue with SHAP, risk dashboard with recharts. Role-gated |
+| Tests | 111 passing — leakage, integrity, split, generator, decisions, auth, API contract |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
