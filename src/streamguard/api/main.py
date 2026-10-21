@@ -20,13 +20,14 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Depends, status, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from streamguard.api.schemas import (
     ScoreRequest, ScoreResponse, HealthResponse, FORBIDDEN_FIELDS,
 )
 from streamguard.api.scorer import Scorer, ScorerConfig
 from streamguard.api.cases import CaseRepository, Verdict, CaseStatus
+from streamguard.api.observability import metrics
 from streamguard.api.auth import (
     UserStore, Role, create_token, decode_token, verify_configuration,
     TokenData,
@@ -216,7 +217,31 @@ async def bad_value(request: Request, exc: ValueError):
         status_code=400,
         content={"detail": "malformed request body"})
 
+@app.middleware("http")
+async def observe(request: Request, call_next):
+    """Time every request and count every status.
 
+    Middleware rather than per-endpoint decorators: an endpoint added
+    later is measured automatically, and nobody has to remember.
+    """
+    endpoint = request.url.path
+    started = metrics.start_request(endpoint)
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    except Exception as exc:
+        metrics.record_error(type(exc).__name__)
+        raise
+    finally:
+        elapsed = metrics.end_request(endpoint, started, status)
+        if elapsed > 1000:
+            # Slow requests are logged individually. The percentiles
+            # show that something is slow; this shows WHICH request.
+            log.warning("slow_request", path=endpoint,
+                        ms=round(elapsed, 1), status=status)
+            
 @app.exception_handler(Exception)
 async def unhandled(request: Request, exc: Exception):
     """Never leak a stack trace to a caller.
@@ -352,3 +377,34 @@ def whoami(user: TokenData = Depends(current_user)) -> dict:
     return {"username": user.username, "role": user.role,
             "permissions": sorted(PERMISSIONS.get(user.role, [])),
             "expires_at": user.expires_at.isoformat()}
+
+
+
+@app.get("/metrics")
+def metrics_endpoint(user: TokenData = Depends(require("read_stats"))) -> dict:
+    """Counters, latency percentiles and saturation.
+
+    Requires read_stats: request volumes and decision mix are
+    commercially sensitive, and an unauthenticated metrics endpoint
+    tells an attacker how much traffic the service handles and how
+    often it blocks.
+    """
+    snap = metrics.snapshot()
+    s = _scorer
+    if s is not None:
+        snap["scorer"] = {
+            "model_version": s.model_version,
+            "n_features": len(s.feature_names),
+            "scored": s.scored,
+            "duplicates": s.duplicates,
+            "warm_events": s.warm_events,
+        }
+    return snap
+
+
+@app.get("/metrics/prometheus")
+def metrics_prometheus(
+        user: TokenData = Depends(require("read_stats"))) -> Response:
+    """The same numbers in Prometheus exposition format."""
+    return Response(content=metrics.prometheus(),
+                    media_type="text/plain; version=0.0.4")

@@ -37,6 +37,7 @@ from streamguard.features.computer import FeatureComputer
 from streamguard.features.state import StateStore
 from streamguard.features.graph import TransactionGraph, GRAPH_FEATURE_NAMES
 from streamguard.api.decisions import DecisionEngine, DecisionConfig
+from streamguard.api.observability import metrics
 from streamguard.utils.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -169,30 +170,40 @@ class Scorer:
         cached = self.seen.get(ref)
         if cached is not None:
             self.duplicates += 1
+            metrics.duplicates += 1
             out = dict(cached)
             out["latency_ms"] = (time.perf_counter() - t0) * 1000
             out["duplicate"] = True
             return out
 
+        t = time.perf_counter()
         base = self.computer.process(payload)
+        metrics.record_stage("features", (time.perf_counter() - t) * 1000)
+
+        t = time.perf_counter()
         graph = self._graph_process(payload)
+        metrics.record_stage("graph", (time.perf_counter() - t) * 1000)
 
         merged = {**base, **graph}
         row = np.array([[merged.get(c, 0.0) for c in self.feature_names]],
                        dtype=np.float32)
 
+        t = time.perf_counter()
         prob = float(self.booster.predict(row)[0])
+        metrics.record_stage("predict", (time.perf_counter() - t) * 1000)
         outcome = self.engine.decide(payload, prob)
         decision = outcome.decision.value
+        metrics.record_decision(decision)
         reasons = []
         explained = False
         if self.explainer is not None and decision != "approve":
             # Only explain what a human will look at. Explaining every
             # approved transaction would double the cost of the common
             # path for an explanation nobody reads.
+            t = time.perf_counter()
             reasons = self._explain(row, merged)
+            metrics.record_stage("shap", (time.perf_counter() - t) * 1000)
             explained = True
-
         result = {
             "probability": prob,
             "decision": decision,

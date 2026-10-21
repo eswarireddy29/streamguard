@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–F complete. Tasks 28–29 complete. Starting Task 30
+**Status:** → Phases A–F complete. Tasks 30 complete. Starting Task 31
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -178,8 +178,8 @@ not reopen it.**
 **PHASE G — QUALITY**
 28. ✅Unit + integration tests (pytest)
 29. ✅API tests + error handling hardening
-30. ⬜**← CURRENT.**Drift monitoring (Evidently) + retraining from analyst labels
-31. ⬜ Load testing + structured logging + observability
+30. ✅Drift monitoring (Evidently) + retraining from analyst labels
+31. ⬜ **← CURRENT.**Load testing + structured logging + observability
 
 **PHASE H — DELIVERY**
 32. ⬜ README, Mermaid diagrams, GitHub + CI, screenshots, demo script,
@@ -2111,6 +2111,165 @@ ordinary — `mode='before'` fixed that. And free-text fields had no
 length limit at all. What was already right was that no error body
 leaked a traceback, a table name, or the database password."*
 
+### Task 30 — Drift monitoring + retraining loop ✅ 21 Oct
+
+**Files:** `src/streamguard/ml/drift.py`, `scripts/check_drift.py`,
+`scripts/retrain_from_labels.py`, `tests/test_drift.py`
+
+**This closes the architecture promise from Task 1:** *"a closed loop:
+analyst labels flow back into retraining."*
+
+#### PSI and KS written directly, not taken from a library
+
+Two measures, because they catch different things:
+
+- **PSI** — how much probability mass moved between bins. The banking
+  standard, and a formula that fits on a whiteboard.
+- **KS** — the largest gap between two cumulative distributions.
+  Catches a shift in the middle that PSI's binning can smooth away.
+
+**Bin edges come from the REFERENCE distribution**, not the combined
+data. Combined edges would let the current period define the bins it
+is judged against, hiding exactly the shift being looked for.
+
+**The p-value is reported but should not be acted on.** With 550,000
+rows a trivial shift becomes "significant". The statistic is the
+number that matters.
+
+#### A FALSE ALARM THAT WOULD HAVE RUINED THE MONITOR
+
+The first run reported **7 features with significant drift**:
+
+| feature | PSI | ref mean | cur mean |
+|---|---|---|---|
+| card_age_days | **11.42** | 30.5 | 82.1 |
+| merchant_txn_count | 8.89 | 934 | 2,467 |
+| merchant_distinct_cards | 8.83 | 706 | 1,520 |
+| card_txn_count | 2.08 | 59 | 156 |
+
+The threshold for "significant" is 0.25. **11.42 is off the scale.**
+
+But none of it is drift. These are **cumulative counters** — running
+totals since the simulation began, so day 80 necessarily exceeds day
+10. `card_age_days` is the same time index Task 18B already caught.
+
+**Why it matters:** these would flag every single day, forever, in any
+deployment. **A monitor that cries wolf daily is one people stop
+reading**, and real drift would be invisible underneath.
+
+Fixed with a `CUMULATIVE_FEATURES` set and a `cumulative` verdict —
+reported separately rather than suppressed, because the growth itself
+is worth watching, just not against a distribution threshold.
+
+**After the fix: 38 stable, 4 moderate, 0 significant.** Worst real
+drift is `amount_ratio_card_max` at PSI 0.2027.
+
+#### Prediction drift — the signal that matters most
+
+| | reference | current |
+|---|---|---|
+| PSI | **0.1198** (moderate) | |
+| mean score | 0.00365 | 0.00335 |
+| flagged at 0.0306 | 0.487% | 0.430% |
+
+An input can move without changing what the model concludes. **Output
+drift means its behaviour changed, and that is what reaches a
+customer.**
+
+#### Evidently dropped, and why
+
+Evidently 0.5.1 was meant to cross-check the PSI numbers. Its API did
+not match (`~TResult` typing error), and it was **dropped rather than
+faked**. The same reasoning as Task 8's Kafka decision: a dependency
+that does not earn its place gets removed.
+
+**The cost is real** — a second opinion is gone. **It is paid for by
+`tests/test_drift.py`**, which checks PSI against cases where the
+answer is known by construction: a distribution against itself must
+give exactly 0, a one-sigma shift must exceed the moderate threshold,
+PSI can never be negative, NaN must not propagate. 22 tests.
+
+#### The retraining loop
+
+Analyst verdicts from Task 22 become training labels.
+
+**Features come from `decisions.features` (JSONB)** — the exact vector
+the model saw at decision time. Recomputing them now would use today's
+state, attaching the label to the wrong inputs. Task 4B stored them
+for skew *detection*; here they are what makes retraining correct.
+
+**Three guards, all verified firing:**
+
+1. **Minimum label count.** Refused at 15 labels: *"retraining on a
+   handful of labels is noise dressed as learning."*
+2. **Both classes required.** Refused when all 15 were
+   `confirmed_fraud` — a model cannot learn a boundary from one class.
+3. **Must beat the incumbent.** Reported, never auto-promoted.
+
+Analyst labels are **appended** to the training set at **10× weight**,
+not used alone: a few dozen labels cannot train a model, but they can
+correct one.
+
+**`inconclusive` is never used.** An analyst who could not decide has
+not said the transaction was legitimate.
+
+#### A BUG CAUGHT BY THE PROMOTION GATE
+
+First comparison:
+lgbm_v6 0.9456
+retrained 0.9507 +0.0051 “BETTER. Promote.”
+
+**But Task 18A measured lgbm_v6 at 0.9675 on the same block.**
+
+The script loaded `features.parquet` (49 features) while v6 needs 58,
+and my `frame_for()` **zero-filled the 10 missing graph columns**. The
+incumbent was scored with a sixth of its inputs blanked out.
+
+Fixed by loading the matching file and **raising instead of
+zero-filling** — a missing feature means the wrong file is loaded, and
+the comparison that follows would be a lie.
+
+After the fix:
+lgbm_v6 0.9675 <- matches Task 18A exactly
+retrained 0.9507 -0.0168
+“WORSE. Do NOT promote.”
+
+**The honest result.** The retrained model only sees 49 features; v6
+uses 58. And the point stands: without the fix, the gate would have
+**promoted a worse model on a fabricated improvement**. That is
+precisely what the gate exists to prevent.
+
+#### Label quality, measurable only because the data is synthetic
+
+**Analyst agreement with generator truth: 18/18 (100%).** A real
+deployment has no ground truth to check against. This measures the
+label quality the whole loop depends on, and 100% here reflects that
+only clearly-seeded fraud was reviewed.
+
+#### Known limitation
+
+The stored JSONB holds 61 features but only **49 reach the retrained
+model**, because `feature_cols` intersects against the 49-feature
+`FEATURE_NAMES` contract. The graph features are recorded but unused
+in retraining. Worth fixing before the loop is relied on.
+
+**Interview talking points**
+
+*"My drift monitor's first run flagged seven features as significantly
+drifted, one at PSI 11.4 against a threshold of 0.25. None of it was
+drift — they were cumulative counters, so they would have flagged
+every day forever. A monitor that cries wolf daily is one people stop
+reading, so I classified them separately rather than suppressing them."*
+
+*"The retraining loop told me to promote a model that was actually
+worse. The comparison loaded the wrong feature file and zero-filled
+the ten missing columns, so the incumbent was scored with a sixth of
+its inputs blanked out and the new model looked better by 0.005. Once
+fixed, the incumbent scored 0.9675 — matching an earlier measurement
+exactly — and the new model was worse by 0.017. The promotion gate
+refused it. That is the whole reason the gate exists: a loop that
+promotes itself has no way to refuse a bad model."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -2325,7 +2484,7 @@ alembic revision --autogenerate -m "description"
 ---
 
 ## WHERE I AM RIGHT NOW
-## WHERE I AM RIGHT NOW → **28 of 32 tasks complete.**
+## WHERE I AM RIGHT NOW → **30 of 32 tasks complete.**
 
 ### What exists and works right now
 
@@ -2348,6 +2507,8 @@ alembic revision --autogenerate -m "description"
 | Frontend | React + Vite, 3 tabs: live stream, case queue with SHAP, risk dashboard with recharts. Role-gated |
 | Tests | 111 passing — leakage, integrity, split, generator, decisions, auth, API contract |
 | Tests | 136 passing — leakage, integrity, split, generator, decisions, auth, API contract, hardening |
+| Drift | PSI + KS, own implementation, 22 tests. Cumulative counters classified separately. Prediction drift PSI 0.1198 |
+| Retraining | Analyst verdicts → labels, 3 guards, human promotion gate. Caught a zero-fill bug that would have promoted a worse model |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
