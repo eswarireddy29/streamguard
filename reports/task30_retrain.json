@@ -1,0 +1,85 @@
+{
+  "created_at": "2026-10-21T19:53:33",
+  "n_labels": 18,
+  "label_counts": {
+    "confirmed_fraud": 15,
+    "legitimate": 3
+  },
+  "analyst_agreement": 1.0,
+  "features_matched": 49,
+  "label_weight": 10.0,
+  "current": {
+    "model": "lgbm_v6",
+    "block": "val",
+    "n": 115566,
+    "n_fraud": 507,
+    "prevalence": 0.00438710347333991,
+    "pr_auc": 0.9675091131339572,
+    "pr_auc_random": 0.00438710347333991,
+    "lift_over_random": 220.53482873459348,
+    "roc_auc": 0.9984092716483524,
+    "k": 1300,
+    "alerts_per_day": 100,
+    "precision_at_k": 0.38076923076923075,
+    "recall_at_k": 0.9763313609467456,
+    "fraud_caught_at_k": 495,
+    "accuracy_always_negative": 0.9956128965266601,
+    "per_pattern_recall_at_k": {
+      "account_takeover": 0.9354838709677419,
+      "card_not_present": 1.0,
+      "card_testing": 0.9921259842519685,
+      "geo_impossible": 1.0,
+      "merchant_collusion": 1.0
+    },
+    "per_pattern_n": {
+      "account_takeover": 155,
+      "card_not_present": 52,
+      "card_testing": 254,
+      "geo_impossible": 17,
+      "merchant_collusion": 29
+    },
+    "binary_precision": null,
+    "binary_recall": null,
+    "binary_f1": null,
+    "binary_flagged": null,
+    "notes": []
+  },
+  "retrained": {
+    "model": "retrained",
+    "block": "val",
+    "n": 115566,
+    "n_fraud": 507,
+    "prevalence": 0.00438710347333991,
+    "pr_auc": 0.9506962106473282,
+    "pr_auc_random": 0.00438710347333991,
+    "lift_over_random": 216.70248181394308,
+    "roc_auc": 0.9976643832485017,
+    "k": 1300,
+    "alerts_per_day": 100,
+    "precision_at_k": 0.3776923076923077,
+    "recall_at_k": 0.9684418145956607,
+    "fraud_caught_at_k": 491,
+    "accuracy_always_negative": 0.9956128965266601,
+    "per_pattern_recall_at_k": {
+      "account_takeover": 0.9096774193548387,
+      "card_not_present": 1.0,
+      "card_testing": 0.9960629921259843,
+      "geo_impossible": 1.0,
+      "merchant_collusion": 0.9655172413793104
+    },
+    "per_pattern_n": {
+      "account_takeover": 155,
+      "card_not_present": 52,
+      "card_testing": 254,
+      "geo_impossible": 17,
+      "merchant_collusion": 29
+    },
+    "binary_precision": null,
+    "binary_recall": null,
+    "binary_f1": null,
+    "binary_flagged": null,
+    "notes": []
+  },
+  "delta": -0.016812902486628922,
+  "recommend_promote": false
+}
