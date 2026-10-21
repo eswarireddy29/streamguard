@@ -54,13 +54,20 @@ jobs:
           python -c "import streamguard.features.graph"
 
       - name: Run self-contained tests
+        # Three tests in test_hardening.py reach PostgreSQL through
+        # GET /cases, so they return 500 here and pass locally. They
+        # are deselected by name rather than by skipping the file -
+        # the other 22 tests in it need no database.
         run: |
           pytest -v \
             tests/test_decisions.py \
             tests/test_auth.py \
             tests/test_hardening.py \
             tests/test_drift.py \
-            tests/test_no_leakage.py
+            tests/test_no_leakage.py \
+            --deselect tests/test_hardening.py::TestQueryParameterBounds::test_valid_status_values_still_work \
+            --deselect tests/test_hardening.py::TestMalformedBodies::test_sql_in_a_path_parameter_is_harmless \
+            --deselect tests/test_hardening.py::TestMalformedBodies::test_cases_table_still_exists_afterwards
 
       - name: Report what was not run
         if: always()
@@ -73,5 +80,6 @@ jobs:
           echo "| test_generator_integrity.py | features.parquet |" >> $GITHUB_STEP_SUMMARY
           echo "| test_splitter.py | features.parquet |" >> $GITHUB_STEP_SUMMARY
           echo "| test_api.py | a live PostgreSQL database |" >> $GITHUB_STEP_SUMMARY
+          echo "| 3 tests in test_hardening.py | a live PostgreSQL database |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Run \`pytest\` locally for the full 158." >> $GITHUB_STEP_SUMMARY
