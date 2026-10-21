@@ -1,7 +1,7 @@
 # STREAMGUARD — PROJECT HANDOFF RECORD
 
 **Last updated:** 20 Oct 2026
-**Status:** → Phases A–F complete. Tasks 30 complete. Starting Task 31
+**Status:** → Phases A–F complete. Tasks 31 complete. Starting Task 32
 
 > Paste this whole file into a new chat to resume the project without
 > rebuilding context.
@@ -179,10 +179,10 @@ not reopen it.**
 28. ✅Unit + integration tests (pytest)
 29. ✅API tests + error handling hardening
 30. ✅Drift monitoring (Evidently) + retraining from analyst labels
-31. ⬜ **← CURRENT.**Load testing + structured logging + observability
+31. ✅Load testing + structured logging + observability
 
 **PHASE H — DELIVERY**
-32. ⬜ README, Mermaid diagrams, GitHub + CI, screenshots, demo script,
+32. ⬜**← CURRENT.** README, Mermaid diagrams, GitHub + CI, screenshots, demo script,
     project report, slides, interview Q&A
 
 ---
@@ -2270,6 +2270,113 @@ exactly — and the new model was worse by 0.017. The promotion gate
 refused it. That is the whole reason the gate exists: a loop that
 promotes itself has no way to refuse a bad model."*
 
+### Task 31 — Load testing + observability ✅ 21 Oct
+
+**Files:** `src/streamguard/api/observability.py`,
+`scripts/load_test.py`, middleware and `/metrics` in `main.py`,
+stage timing in `scorer.py`
+
+#### /health answers "is it up". That is not enough to run anything.
+
+When latency doubles at 3am you need to know **which stage** slowed,
+whether errors are rising, and how many requests are queueing. Those
+questions cannot be answered after the fact from a log file.
+
+**Design constraints, because this runs inside the latency budget:**
+
+- **Bounded memory** — a `deque(maxlen=10_000)` per stage, not a
+  growing list. An observability system that leaks memory eventually
+  takes down the thing it was watching.
+- **Percentiles computed ON READ.** Sorting on every request would
+  cost more than the request.
+- **No locks on the hot path.** Exact accuracy under concurrency is
+  not worth a lock inside a 2ms request.
+
+**Middleware, not per-endpoint decorators** — an endpoint added later
+is measured automatically and nobody has to remember.
+
+**`/metrics` requires `read_stats`.** Request volumes and decision mix
+are commercially sensitive, and an unauthenticated metrics endpoint
+tells an attacker how much traffic the service handles and how often
+it blocks.
+
+**Prometheus format is emitted** even though Prometheus is not
+running — installing it would break the zero-rupee constraint. The
+format means a scraper can be pointed at it without a rewrite.
+
+#### CAPACITY, MEASURED
+
+| clients | req/sec | p50 | p95 | p99 | errors |
+|---|---|---|---|---|---|
+| 1 | 29 | 33.1 | 52.2 | 66.9 | 0 |
+| 2 | 48 | 40.3 | 63.3 | 79.8 | 0 |
+| **4** | **62** | 64.8 | 86.1 | **96.8** | 0 |
+| 8 | 46 | 152.7 | 295.6 | **397.4** | 0 |
+| 16 | 51 | 290.6 | 469.4 | 543.8 | 0 |
+
+- **Peak throughput: 62 req/sec at 4 concurrent clients**
+- **Within the 100 ms p99 budget up to 4 clients** (96.8 ms)
+- **Budget breached at 8** (397.4 ms)
+- **Zero errors at every level** — it degrades gracefully rather than
+  falling over
+
+**Throughput DECLINES past the peak:** 62 → 46 req/sec from 4 to 8
+clients, while p99 quadruples. Past the GIL's capacity extra clients
+only add queueing.
+
+**Scaling efficiency:**
+
+| clients | achieved | ideal | efficiency |
+|---|---|---|---|
+| 2 | 1.66× | 2× | 83% |
+| 4 | 2.15× | 4× | 54% |
+| 8 | 1.62× | 8× | 20% |
+| 16 | 1.76× | 16× | 11% |
+
+**This is the measured price of Task 19's Option A.** `/score` is
+synchronous CPU work in one uvicorn worker, so Python's GIL
+serialises it — and workers cannot be added without losing the shared
+in-memory feature state that Option A depends on. Horizontal scaling
+needs a durable state store, at the cost of a round-trip per request.
+
+#### Where the time actually goes
+
+Server-side, from the service's own `/metrics`:
+
+| stage | n | p50 | p95 | p99 |
+|---|---|---|---|---|
+| total | 1,522 | 50.68 | 299.79 | 385.08 |
+| features | 1,520 | 1.25 | 6.81 | 9.48 |
+| graph | 1,520 | 0.95 | 9.04 | 27.72 |
+| predict | 1,520 | 1.91 | 10.00 | 22.27 |
+| **shap** | **15** | **13.31** | 62.49 | **139.43** |
+
+**The model is about 4 ms of a 50 ms request.** The rest is
+framework, serialisation, the Task 22 database write, and queueing.
+Optimising the model would be optimising 8% of the problem.
+
+**SHAP ran on 15 of 1,522 requests but its p99 is 139 ms** — on its
+own, more than the whole budget. The Task 19 decision to skip it on
+approvals is what keeps the common path viable; at 8+ clients a
+cluster of flagged transactions would breach the budget by itself.
+
+**A number that moved since Task 20.** Task 20 measured 15.84 ms
+client p50 at concurrency 1; here it is 33.1 ms. The difference is
+the observability middleware plus the Task 22 persistence write,
+which the Task 20 run did not do. Worth stating rather than quoting
+the older, friendlier figure.
+
+**Interview talking point**
+
+*"I load-tested until it broke rather than until it looked good. Peak
+is 62 requests a second at four concurrent clients; at eight,
+throughput actually falls and p99 goes from 97 to 397 milliseconds.
+That is the GIL — scoring is synchronous CPU work in one worker, and
+I cannot add workers without losing the in-memory feature state. The
+more useful finding came from the per-stage metrics: the model is
+about four milliseconds of a fifty-millisecond request. Optimising it
+would be optimising eight percent of the problem."*
+
 #### The editable install — a structural fix
 
 `pytest` failed at first with `ModuleNotFoundError: No module named
@@ -2509,6 +2616,8 @@ alembic revision --autogenerate -m "description"
 | Tests | 136 passing — leakage, integrity, split, generator, decisions, auth, API contract, hardening |
 | Drift | PSI + KS, own implementation, 22 tests. Cumulative counters classified separately. Prediction drift PSI 0.1198 |
 | Retraining | Analyst verdicts → labels, 3 guards, human promotion gate. Caught a zero-fill bug that would have promoted a worse model |
+| Observability | /metrics + Prometheus format, per-stage latency, saturation counters. read_stats gated |
+| Capacity | 62 req/sec peak at 4 clients, p99 96.8 ms. Breaches budget at 8. GIL-bound, 0 errors throughout |
 #### Per-pattern recall in the top 1,300 (logistic, validation)
 
 | pattern | recall | n |
